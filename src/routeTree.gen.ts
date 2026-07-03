@@ -9,13 +9,19 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VendorPortalRouteImport } from './routes/vendor-portal'
 import { Route as SuperAdminRouteImport } from './routes/super-admin'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SuperAdminIndexRouteImport } from './routes/super-admin.index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
+import { Route as SuperAdminTransactionsRouteImport } from './routes/super-admin.transactions'
+import { Route as SuperAdminSettingsRouteImport } from './routes/super-admin.settings'
+import { Route as SuperAdminReportsRouteImport } from './routes/super-admin.reports'
+import { Route as SuperAdminOrganizationsRouteImport } from './routes/super-admin.organizations'
 import { Route as DashboardVendorsRouteImport } from './routes/dashboard.vendors'
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard.settings'
 import { Route as DashboardReportsRouteImport } from './routes/dashboard.reports'
@@ -23,6 +29,11 @@ import { Route as DashboardReceiptsRouteImport } from './routes/dashboard.receip
 import { Route as DashboardPaymentsRouteImport } from './routes/dashboard.payments'
 import { Route as DashboardDuesRouteImport } from './routes/dashboard.dues'
 
+const VendorPortalRoute = VendorPortalRouteImport.update({
+  id: '/vendor-portal',
+  path: '/vendor-portal',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SuperAdminRoute = SuperAdminRouteImport.update({
   id: '/super-admin',
   path: '/super-admin',
@@ -53,10 +64,35 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SuperAdminIndexRoute = SuperAdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
 const DashboardIndexRoute = DashboardIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => DashboardRoute,
+} as any)
+const SuperAdminTransactionsRoute = SuperAdminTransactionsRouteImport.update({
+  id: '/transactions',
+  path: '/transactions',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminSettingsRoute = SuperAdminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminReportsRoute = SuperAdminReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
+const SuperAdminOrganizationsRoute = SuperAdminOrganizationsRouteImport.update({
+  id: '/organizations',
+  path: '/organizations',
+  getParentRoute: () => SuperAdminRoute,
 } as any)
 const DashboardVendorsRoute = DashboardVendorsRouteImport.update({
   id: '/vendors',
@@ -95,28 +131,39 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
-  '/super-admin': typeof SuperAdminRoute
+  '/super-admin': typeof SuperAdminRouteWithChildren
+  '/vendor-portal': typeof VendorPortalRoute
   '/dashboard/dues': typeof DashboardDuesRoute
   '/dashboard/payments': typeof DashboardPaymentsRoute
   '/dashboard/receipts': typeof DashboardReceiptsRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/vendors': typeof DashboardVendorsRoute
+  '/super-admin/organizations': typeof SuperAdminOrganizationsRoute
+  '/super-admin/reports': typeof SuperAdminReportsRoute
+  '/super-admin/settings': typeof SuperAdminSettingsRoute
+  '/super-admin/transactions': typeof SuperAdminTransactionsRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/super-admin/': typeof SuperAdminIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
-  '/super-admin': typeof SuperAdminRoute
+  '/vendor-portal': typeof VendorPortalRoute
   '/dashboard/dues': typeof DashboardDuesRoute
   '/dashboard/payments': typeof DashboardPaymentsRoute
   '/dashboard/receipts': typeof DashboardReceiptsRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/vendors': typeof DashboardVendorsRoute
+  '/super-admin/organizations': typeof SuperAdminOrganizationsRoute
+  '/super-admin/reports': typeof SuperAdminReportsRoute
+  '/super-admin/settings': typeof SuperAdminSettingsRoute
+  '/super-admin/transactions': typeof SuperAdminTransactionsRoute
   '/dashboard': typeof DashboardIndexRoute
+  '/super-admin': typeof SuperAdminIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -125,14 +172,20 @@ export interface FileRoutesById {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
-  '/super-admin': typeof SuperAdminRoute
+  '/super-admin': typeof SuperAdminRouteWithChildren
+  '/vendor-portal': typeof VendorPortalRoute
   '/dashboard/dues': typeof DashboardDuesRoute
   '/dashboard/payments': typeof DashboardPaymentsRoute
   '/dashboard/receipts': typeof DashboardReceiptsRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/vendors': typeof DashboardVendorsRoute
+  '/super-admin/organizations': typeof SuperAdminOrganizationsRoute
+  '/super-admin/reports': typeof SuperAdminReportsRoute
+  '/super-admin/settings': typeof SuperAdminSettingsRoute
+  '/super-admin/transactions': typeof SuperAdminTransactionsRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/super-admin/': typeof SuperAdminIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -143,27 +196,38 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/super-admin'
+    | '/vendor-portal'
     | '/dashboard/dues'
     | '/dashboard/payments'
     | '/dashboard/receipts'
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/vendors'
+    | '/super-admin/organizations'
+    | '/super-admin/reports'
+    | '/super-admin/settings'
+    | '/super-admin/transactions'
     | '/dashboard/'
+    | '/super-admin/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/forgot-password'
     | '/login'
     | '/signup'
-    | '/super-admin'
+    | '/vendor-portal'
     | '/dashboard/dues'
     | '/dashboard/payments'
     | '/dashboard/receipts'
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/vendors'
+    | '/super-admin/organizations'
+    | '/super-admin/reports'
+    | '/super-admin/settings'
+    | '/super-admin/transactions'
     | '/dashboard'
+    | '/super-admin'
   id:
     | '__root__'
     | '/'
@@ -172,13 +236,19 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/super-admin'
+    | '/vendor-portal'
     | '/dashboard/dues'
     | '/dashboard/payments'
     | '/dashboard/receipts'
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/vendors'
+    | '/super-admin/organizations'
+    | '/super-admin/reports'
+    | '/super-admin/settings'
+    | '/super-admin/transactions'
     | '/dashboard/'
+    | '/super-admin/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -187,11 +257,19 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   SignupRoute: typeof SignupRoute
-  SuperAdminRoute: typeof SuperAdminRoute
+  SuperAdminRoute: typeof SuperAdminRouteWithChildren
+  VendorPortalRoute: typeof VendorPortalRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/vendor-portal': {
+      id: '/vendor-portal'
+      path: '/vendor-portal'
+      fullPath: '/vendor-portal'
+      preLoaderRoute: typeof VendorPortalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/super-admin': {
       id: '/super-admin'
       path: '/super-admin'
@@ -234,12 +312,47 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/super-admin/': {
+      id: '/super-admin/'
+      path: '/'
+      fullPath: '/super-admin/'
+      preLoaderRoute: typeof SuperAdminIndexRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
     '/dashboard/': {
       id: '/dashboard/'
       path: '/'
       fullPath: '/dashboard/'
       preLoaderRoute: typeof DashboardIndexRouteImport
       parentRoute: typeof DashboardRoute
+    }
+    '/super-admin/transactions': {
+      id: '/super-admin/transactions'
+      path: '/transactions'
+      fullPath: '/super-admin/transactions'
+      preLoaderRoute: typeof SuperAdminTransactionsRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/settings': {
+      id: '/super-admin/settings'
+      path: '/settings'
+      fullPath: '/super-admin/settings'
+      preLoaderRoute: typeof SuperAdminSettingsRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/reports': {
+      id: '/super-admin/reports'
+      path: '/reports'
+      fullPath: '/super-admin/reports'
+      preLoaderRoute: typeof SuperAdminReportsRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
+    '/super-admin/organizations': {
+      id: '/super-admin/organizations'
+      path: '/organizations'
+      fullPath: '/super-admin/organizations'
+      preLoaderRoute: typeof SuperAdminOrganizationsRouteImport
+      parentRoute: typeof SuperAdminRoute
     }
     '/dashboard/vendors': {
       id: '/dashboard/vendors'
@@ -310,14 +423,45 @@ const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
   DashboardRouteChildren,
 )
 
+interface SuperAdminRouteChildren {
+  SuperAdminOrganizationsRoute: typeof SuperAdminOrganizationsRoute
+  SuperAdminReportsRoute: typeof SuperAdminReportsRoute
+  SuperAdminSettingsRoute: typeof SuperAdminSettingsRoute
+  SuperAdminTransactionsRoute: typeof SuperAdminTransactionsRoute
+  SuperAdminIndexRoute: typeof SuperAdminIndexRoute
+}
+
+const SuperAdminRouteChildren: SuperAdminRouteChildren = {
+  SuperAdminOrganizationsRoute: SuperAdminOrganizationsRoute,
+  SuperAdminReportsRoute: SuperAdminReportsRoute,
+  SuperAdminSettingsRoute: SuperAdminSettingsRoute,
+  SuperAdminTransactionsRoute: SuperAdminTransactionsRoute,
+  SuperAdminIndexRoute: SuperAdminIndexRoute,
+}
+
+const SuperAdminRouteWithChildren = SuperAdminRoute._addFileChildren(
+  SuperAdminRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   SignupRoute: SignupRoute,
-  SuperAdminRoute: SuperAdminRoute,
+  SuperAdminRoute: SuperAdminRouteWithChildren,
+  VendorPortalRoute: VendorPortalRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
