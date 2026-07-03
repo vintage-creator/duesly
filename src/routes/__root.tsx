@@ -10,7 +10,7 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
+import { reportClientError } from "../lib/error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
@@ -39,7 +39,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    reportClientError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
 
   return (
@@ -80,10 +80,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=5" },
       { name: "theme-color", content: "#0b1a3a" },
       { title: "Duesly — Dues, Levies & Reconciliation for Associations" },
-      { name: "description", content: "Duesly is a virtual-account-powered dues, levy, and payment reconciliation platform for markets, estates, cooperatives, and trade groups." },
+      {
+        name: "description",
+        content:
+          "Duesly is a virtual-account-powered dues, levy, and payment reconciliation platform for markets, estates, cooperatives, and trade groups.",
+      },
       { name: "author", content: "Duesly" },
       { property: "og:title", content: "Duesly — Trusted Collections for Associations" },
-      { property: "og:description", content: "Unique virtual accounts, auto reconciliation, receipts, and reports — built for serious collections." },
+      {
+        property: "og:description",
+        content:
+          "Unique virtual accounts, auto reconciliation, receipts, and reports — built for serious collections.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -91,7 +99,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "stylesheet", href: appCss },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap",
+      },
       { rel: "manifest", href: "/manifest.webmanifest" },
     ],
   }),
