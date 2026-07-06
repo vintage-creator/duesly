@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { getNotifications, markNotificationRead, clearAllNotifications } from "@/lib/db-actions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { getVocabulary } from "@/lib/vocabulary";
 
 export interface NavItem {
   label: string;
@@ -22,7 +23,7 @@ interface DashboardShellProps {
   title: string;
   subtitle?: string;
   role: string;
-  user: { name: string; initials: string };
+  user: { name: string; initials: string; org_type?: string };
   children: ReactNode;
   actions?: ReactNode;
 }
@@ -41,7 +42,17 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
   const [open, setOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [notiOpen, setNotiOpen] = useState(false);
-  const bottomNav = nav.slice(0, 5);
+  const vocab = getVocabulary(user?.org_type);
+  const localizedNav = nav.map((item) => {
+    if (item.to === "/dashboard/vendors") {
+      return { ...item, label: vocab.members };
+    }
+    if (item.to === "/dashboard/dues") {
+      return { ...item, label: vocab.dues };
+    }
+    return item;
+  });
+  const bottomNav = localizedNav.slice(0, 5);
 
   const [activeNotis, setActiveNotis] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -147,7 +158,7 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
           </div>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-3">
-          {nav.map((item) => {
+          {localizedNav.map((item) => {
             const active = item.to === "/super-admin" || item.to === "/dashboard"
               ? path === item.to
               : path === item.to || path.startsWith(item.to + "/");
@@ -191,7 +202,7 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
               <button onClick={() => setOpen(false)} className="rounded-lg p-2 hover:bg-sidebar-accent"><X className="h-5 w-5" /></button>
             </div>
             <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-              {nav.map((item) => {
+              {localizedNav.map((item) => {
                 const active = item.to === "/super-admin" || item.to === "/dashboard"
                   ? path === item.to
                   : path === item.to || path.startsWith(item.to + "/");

@@ -16,6 +16,7 @@ export function OrgShell({ title, subtitle, actions, children }: { title: string
   const [suspended, setSuspended] = useState(false);
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(false);
+  const [orgType, setOrgType] = useState<string | undefined>(undefined);
   const navigate = useNavigate();
 
   const syncUser = () => {
@@ -26,6 +27,7 @@ export function OrgShell({ title, subtitle, actions, children }: { title: string
         if (parsed.role === "admin" || parsed.role === "super-admin") {
           setUserName(parsed.name || "Admin");
           setUserRole(parsed.role === "admin" ? "Organization Admin" : "Super Admin");
+          setOrgType(parsed.org_type);
         }
       } catch (e) {
         console.error(e);
@@ -54,6 +56,7 @@ export function OrgShell({ title, subtitle, actions, children }: { title: string
       if (parsed.role === "admin" || parsed.role === "super-admin") {
         setUserName(parsed.name || "Admin");
         setUserRole(parsed.role === "admin" ? "Organization Admin" : "Super Admin");
+        setOrgType(parsed.org_type);
         setAuthorized(true);
         
         if (parsed.org_id && parsed.role !== "super-admin") {
@@ -153,7 +156,7 @@ export function OrgShell({ title, subtitle, actions, children }: { title: string
       title={title}
       subtitle={subtitle}
       role={userRole}
-      user={{ name: userName, initials }}
+      user={{ name: userName, initials, org_type: orgType }}
       actions={actions}
     >
       {children}
