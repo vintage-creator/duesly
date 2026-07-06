@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { getNotifications, markNotificationRead, clearAllNotifications } from "@/lib/db-actions";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 export interface NavItem {
   label: string;
@@ -36,6 +37,7 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
 
   const [activeNotis, setActiveNotis] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [selectedAlert, setSelectedAlert] = useState<any | null>(null);
 
   const fetchNotis = () => {
     const localUser = localStorage.getItem("user");
@@ -237,7 +239,10 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
                       {activeNotis.map(n => (
                         <div 
                           key={n.id} 
-                          onClick={() => handleMarkRead(n.id)}
+                          onClick={() => {
+                            handleMarkRead(n.id);
+                            setSelectedAlert(n);
+                          }}
                           className={cn(
                             "border-b border-border/60 pb-2 last:border-0 last:pb-0 cursor-pointer p-2 rounded-xl transition-colors hover:bg-secondary/40",
                             !n.read ? "bg-emerald/5 border-l-2 border-l-emerald pl-2.5" : ""
@@ -300,6 +305,27 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
           })}
         </div>
       </nav>
+
+      {/* Alert Detail Dialog */}
+      <Dialog open={!!selectedAlert} onOpenChange={(o) => !o && setSelectedAlert(null)}>
+        <DialogContent className="max-w-md rounded-2xl p-6 border border-emerald/10 shadow-elevated">
+          <DialogHeader className="pb-3 border-b border-border/60">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald ring-4 ring-emerald/20 animate-pulse" />
+              <DialogTitle className="font-display font-bold text-navy text-base">{selectedAlert?.title}</DialogTitle>
+            </div>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            <p className="text-sm text-slate-700 leading-relaxed font-sans font-medium">{selectedAlert?.message}</p>
+            <p className="text-[10px] text-muted-foreground font-mono">
+              {selectedAlert && new Date(selectedAlert.created_at).toLocaleDateString("en-NG", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} · {selectedAlert && new Date(selectedAlert.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+            </p>
+          </div>
+          <DialogFooter className="pt-3 border-t border-border/60">
+            <Button variant="hero" className="cursor-pointer w-full sm:w-auto" onClick={() => setSelectedAlert(null)}>Dismiss Alert</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
