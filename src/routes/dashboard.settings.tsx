@@ -19,13 +19,22 @@ export const Route = createFileRoute("/dashboard/settings")({
 
 function Page() {
   const router = useRouter();
-  const { orgName } = Route.useLoaderData();
+  const { orgName, orgPhone, orgAddress, walletAccount, dailySummaryActive, smsReceiptsActive, weeklyReportActive, underpaymentAlertsActive } = Route.useLoaderData();
 
   const [user, setUser] = useState<{ email: string; name: string; org_id?: string } | null>(null);
   const [profileName, setProfileName] = useState("");
   const [password, setPassword] = useState("");
   const [currentOrgName, setCurrentOrgName] = useState(orgName);
   const [currentOrgType, setCurrentOrgType] = useState(orgName.includes("Market") ? "Market" : orgName.includes("Estate") ? "Estate" : "Cooperative");
+  const [currentOrgPhone, setCurrentOrgPhone] = useState(orgPhone || "");
+  const [currentOrgAddress, setCurrentOrgAddress] = useState(orgAddress || "");
+  const [currentWalletAccount, setCurrentWalletAccount] = useState(walletAccount || "9032 4400 01");
+  
+  const [dailySummary, setDailySummary] = useState(dailySummaryActive ?? true);
+  const [smsReceipts, setSmsReceipts] = useState(smsReceiptsActive ?? true);
+  const [weeklyReport, setWeeklyReport] = useState(weeklyReportActive ?? false);
+  const [underpaymentAlerts, setUnderpaymentAlerts] = useState(underpaymentAlertsActive ?? true);
+  
   const [loading, setLoading] = useState(false);
 
   const [bankDialogOpen, setBankDialogOpen] = useState(false);
@@ -70,8 +79,25 @@ function Page() {
       const parsed = JSON.parse(localUser);
       setUser(parsed);
       setProfileName(parsed.name || "");
+      
+      const userOrgId = parsed.org_id;
+      if (userOrgId) {
+        getDashboardData({ data: { orgId: userOrgId } })
+          .then((res: any) => {
+            setCurrentOrgName(res.orgName);
+            setCurrentOrgType(res.orgType);
+            setCurrentOrgPhone(res.orgPhone || "");
+            setCurrentOrgAddress(res.orgAddress || "");
+            setCurrentWalletAccount(res.walletAccount || "9032 4400 01");
+            setDailySummary(res.dailySummaryActive ?? true);
+            setSmsReceipts(res.smsReceiptsActive ?? true);
+            setWeeklyReport(res.weeklyReportActive ?? false);
+            setUnderpaymentAlerts(res.underpaymentAlertsActive ?? true);
+          })
+          .catch(console.error);
+      }
     }
-  }, []);
+  }, [orgName]);
 
   const handleOrgSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,7 +108,9 @@ function Page() {
         data: {
           id: orgId,
           name: currentOrgName,
-          type: currentOrgType
+          type: currentOrgType,
+          phone: currentOrgPhone,
+          address: currentOrgAddress
         }
       });
       if (res.success && res.org) {
@@ -96,6 +124,32 @@ function Page() {
       toast.error("Error saving organization settings");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleSetting = async (key: string, val: boolean) => {
+    const orgId = user?.org_id;
+    if (!orgId) return;
+    try {
+      const res = await updateOrganization({
+        data: {
+          id: orgId,
+          name: currentOrgName,
+          type: currentOrgType,
+          phone: currentOrgPhone,
+          address: currentOrgAddress,
+          [key]: val
+        }
+      });
+      if (res.success) {
+        toast.success("Setting updated successfully!");
+        router.invalidate();
+      } else {
+        toast.error(res.error || "Failed to update setting");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error updating setting");
     }
   };
 
@@ -139,9 +193,9 @@ function Page() {
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div><Label>Organization name</Label><Input required value={currentOrgName} onChange={(e) => setCurrentOrgName(e.target.value)} /></div>
               <div><Label>Type</Label><Input required value={currentOrgType} onChange={(e) => setCurrentOrgType(e.target.value)} /></div>
-              <div><Label>Contact email</Label><Input disabled value={`admin@${currentOrgName.toLowerCase().replace(/\s+/g, "")}.app`} className="bg-secondary" /></div>
-              <div><Label>Phone</Label><Input disabled value="+234 803 412 9087" className="bg-secondary" /></div>
-              <div className="sm:col-span-2"><Label>Address</Label><Input disabled value="Aba, Abia State" className="bg-secondary" /></div>
+              <div><Label>Contact email</Label><Input disabled value={user?.email || `admin@${currentOrgName.toLowerCase().replace(/\s+/g, "")}.app`} className="bg-secondary" /></div>
+              <div><Label>Phone</Label><Input required value={currentOrgPhone} onChange={(e) => setCurrentOrgPhone(e.target.value)} /></div>
+              <div className="sm:col-span-2"><Label>Address</Label><Input required value={currentOrgAddress} onChange={(e) => setCurrentOrgAddress(e.target.value)} /></div>
             </div>
             <div className="mt-4 flex justify-end gap-2">
               <Button variant="hero" type="submit" disabled={loading}>
@@ -182,17 +236,53 @@ function Page() {
         <div className="space-y-6">
           <div className="rounded-2xl border bg-card p-5 shadow-soft">
             <h3 className="font-display text-lg font-bold text-navy">Notifications</h3>
-            <div className="mt-3 space-y-3 text-sm">
-              {["Daily collection summary","SMS receipts to vendors","Weekly compliance report","Underpayment alerts"].map((l, i) => (
-                <label key={l} className="flex items-center justify-between">
-                  <span>{l}</span><Switch defaultChecked={i !== 2} />
-                </label>
-              ))}
+            <p className="mt-1 text-xs text-muted-foreground">Toggle automated collection report dispatches.</p>
+            <div className="mt-4 space-y-3 text-sm text-slate-600">
+              <label className="flex items-center justify-between">
+                <span>Daily collection summary</span>
+                <Switch 
+                  checked={dailySummary} 
+                  onCheckedChange={(v) => {
+                    setDailySummary(v);
+                    handleToggleSetting("dailySummaryActive", v);
+                  }} 
+                />
+              </label>
+              <label className="flex items-center justify-between">
+                <span>SMS receipts to vendors</span>
+                <Switch 
+                  checked={smsReceipts} 
+                  onCheckedChange={(v) => {
+                    setSmsReceipts(v);
+                    handleToggleSetting("smsReceiptsActive", v);
+                  }} 
+                />
+              </label>
+              <label className="flex items-center justify-between">
+                <span>Weekly compliance report</span>
+                <Switch 
+                  checked={weeklyReport} 
+                  onCheckedChange={(v) => {
+                    setWeeklyReport(v);
+                    handleToggleSetting("weeklyReportActive", v);
+                  }} 
+                />
+              </label>
+              <label className="flex items-center justify-between">
+                <span>Underpayment alerts</span>
+                <Switch 
+                  checked={underpaymentAlerts} 
+                  onCheckedChange={(v) => {
+                    setUnderpaymentAlerts(v);
+                    handleToggleSetting("underpaymentAlertsActive", v);
+                  }} 
+                />
+              </label>
             </div>
           </div>
           <div className="rounded-2xl border bg-card p-5 shadow-soft">
             <h3 className="font-display text-lg font-bold text-navy">Bank settlement</h3>
-            <p className="mt-1 text-xs text-muted-foreground">Settlement Wallet · 0123456789 · {orgName}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Settlement Wallet · {currentWalletAccount} · {currentOrgName}</p>
             <Button variant="soft" size="sm" className="mt-3 cursor-pointer" type="button" onClick={() => setBankDialogOpen(true)}>Change account</Button>
             <div className="mt-4 border-t pt-3 flex items-start gap-1.5 text-[10px] text-muted-foreground leading-relaxed">
               <span className="font-bold text-emerald flex items-center gap-0.5 min-w-[100px]">🛡️ Anti-Fraud Lock:</span>

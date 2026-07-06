@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
-import { updateUserProfile } from "@/lib/db-actions";
+import { updateUserProfile, getSystemSettings, updateSystemSetting } from "@/lib/db-actions";
 
 export const Route = createFileRoute("/super-admin/settings")({
   head: () => ({ meta: [{ title: "Platform settings — Duesly Admin" }] }),
@@ -20,6 +20,11 @@ function Page() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [autoApprove, setAutoApprove] = useState(true);
+  const [sendSms, setSendSms] = useState(true);
+  const [enableUssd, setEnableUssd] = useState(false);
+  const [whatsappBot, setWhatsappBot] = useState(false);
+
   useEffect(() => {
     const localUser = localStorage.getItem("user");
     if (localUser) {
@@ -27,7 +32,37 @@ function Page() {
       setUser(parsed);
       setProfileName(parsed.name || "");
     }
+
+    // Load global settings
+    getSystemSettings()
+      .then((res: any) => {
+        setAutoApprove(res.autoApprove);
+        setSendSms(res.sendSms);
+        setEnableUssd(res.enableUssd);
+        setWhatsappBot(res.whatsappBot);
+      })
+      .catch(console.error);
   }, []);
+
+  const handleToggleSetting = async (key: string, val: boolean) => {
+    try {
+      const res = await updateSystemSetting({
+        data: {
+          key,
+          value: val
+        }
+      });
+      if (res.success) {
+        toast.success("Platform configuration updated!");
+        router.invalidate();
+      } else {
+        toast.error("Failed to update configuration");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error saving configuration");
+    }
+  };
 
   const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,12 +135,46 @@ function Page() {
         <div className="rounded-2xl border bg-card p-5 shadow-soft lg:col-span-2">
           <h3 className="font-display text-lg font-bold text-navy">Feature Toggles</h3>
           <div className="mt-3 text-sm grid sm:grid-cols-2 gap-4">
-            {["Auto-approve new organizations","Send SMS receipts","Enable USSD payments","Beta: WhatsApp bot"].map((l, i) => (
-              <label key={l} className="flex items-center justify-between border-b pb-2">
-                <span>{l}</span>
-                <Switch defaultChecked={i % 2 === 0} />
-              </label>
-            ))}
+            <label className="flex items-center justify-between border-b pb-2">
+              <span>Auto-approve new organizations</span>
+              <Switch 
+                checked={autoApprove} 
+                onCheckedChange={(v) => {
+                  setAutoApprove(v);
+                  handleToggleSetting("auto_approve", v);
+                }} 
+              />
+            </label>
+            <label className="flex items-center justify-between border-b pb-2">
+              <span>Send SMS receipts</span>
+              <Switch 
+                checked={sendSms} 
+                onCheckedChange={(v) => {
+                  setSendSms(v);
+                  handleToggleSetting("send_sms", v);
+                }} 
+              />
+            </label>
+            <label className="flex items-center justify-between border-b pb-2">
+              <span>Enable USSD payments</span>
+              <Switch 
+                checked={enableUssd} 
+                onCheckedChange={(v) => {
+                  setEnableUssd(v);
+                  handleToggleSetting("enable_ussd", v);
+                }} 
+              />
+            </label>
+            <label className="flex items-center justify-between border-b pb-2">
+              <span>Beta: WhatsApp bot</span>
+              <Switch 
+                checked={whatsappBot} 
+                onCheckedChange={(v) => {
+                  setWhatsappBot(v);
+                  handleToggleSetting("whatsapp_bot", v);
+                }} 
+              />
+            </label>
           </div>
         </div>
       </div>

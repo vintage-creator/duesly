@@ -1,3 +1,22 @@
+import fs from "fs";
+import path from "path";
+
+// Load env
+try {
+  const envPath = path.join(process.cwd(), ".env");
+  if (fs.existsSync(envPath)) {
+    const env = fs.readFileSync(envPath, "utf-8");
+    for (const line of env.split("\n")) {
+      const parts = line.split("=");
+      if (parts.length >= 2) {
+        process.env[parts[0].trim()] = parts.slice(1).join("=").trim();
+      }
+    }
+  }
+} catch (e) {
+  console.error("Could not load .env file", e);
+}
+
 import { pool } from "../src/lib/db";
 
 async function cleanReset() {
@@ -22,7 +41,7 @@ async function cleanReset() {
     await client.query(
       `INSERT INTO users (email, password, role, org_id, name, is_verified) 
        VALUES ($1, $2, $3, $4, $5, $6);`,
-      ["chuksy3@gmail.com", "Duesly7817##**", "super-admin", null, "Chukwudi Super Admin", true]
+      ["canipf.ng@gmail.com", "Duesly7817##**", "super-admin", null, "Chukwudi Super Admin", true]
     );
 
     // Seed default system notification

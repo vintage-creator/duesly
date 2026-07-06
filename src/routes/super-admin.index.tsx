@@ -184,7 +184,7 @@ function Page() {
                 <td className="py-2.5 font-semibold">{o.name}</td>
                 <td className="py-2.5">{o.type}</td>
                 <td className="py-2.5 text-right font-mono">{formatNumber(o.vendors)}</td>
-                <td className="py-2.5 text-right font-mono font-semibold">₦{Number(o.collected).toLocaleString("en-NG")}</td>
+                <td className="py-2.5 text-right font-mono font-semibold">{formatNaira(o.collected)}</td>
                 <td className="py-2.5 font-bold uppercase text-[9px]">{o.status}</td>
               </tr>
             ))}

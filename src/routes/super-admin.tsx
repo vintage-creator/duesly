@@ -62,7 +62,11 @@ export function SuperShell({ title, subtitle, actions, children }: { title: stri
   }, [navigate]);
 
   if (loading) {
-    return <div className="min-h-screen bg-background" />;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald border-t-transparent" />
+      </div>
+    );
   }
 
   if (!authorized) {

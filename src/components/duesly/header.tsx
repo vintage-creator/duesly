@@ -30,7 +30,7 @@ export function NavigationHeader({ activeSolution }: { activeSolution?: string }
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-card/85 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link to="/"><DueslyLogo /></Link>
+        <DueslyLogo />
 
         {/* Desktop nav */}
         <nav className="hidden items-center gap-6 md:flex">

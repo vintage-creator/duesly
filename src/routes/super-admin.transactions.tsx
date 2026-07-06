@@ -19,6 +19,12 @@ export const Route = createFileRoute("/super-admin/transactions")({
   component: Page,
 });
 
+const formatSignedNaira = (amount: number) => {
+  const numericAmount = Number(amount) || 0;
+  const sign = numericAmount < 0 ? "-" : "";
+  return `${sign}${formatNaira(Math.abs(numericAmount))}`;
+};
+
 function Page() {
   const rows = Route.useLoaderData();
 
@@ -71,19 +77,29 @@ function Page() {
             </thead>
             <tbody>
               {rows.map((p) => {
+                const isDebit = Number(p.amount) < 0;
                 const fee = p.amount * 0.01;
                 const net = p.amount * 0.99;
                 return (
-                   <tr key={p.id} className="border-t border-border hover:bg-secondary/40">
+	                   <tr key={p.id} className={`border-t border-border hover:bg-secondary/40 ${isDebit ? "bg-rose-50/50" : "bg-emerald-50/40"}`}>
                     <td className="px-5 py-3 font-mono text-xs">{p.id}</td>
                     <td className="px-5 py-3 font-medium">{p.org}</td>
-                    <td className="px-5 py-3">{p.vendor}</td>
+                    <td className="px-5 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span>{p.vendor}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${isDebit ? "bg-rose-100 text-rose-700" : "bg-emerald/10 text-emerald-700"}`}>
+                          {isDebit ? "Debit" : "Credit"}
+                        </span>
+                      </div>
+                    </td>
                     <td className="px-5 py-3 font-mono text-xs">{p.account}</td>
-                    <td className="px-5 py-3 text-right font-semibold">{formatNaira(p.amount)}</td>
-                    <td className="px-5 py-3 text-right text-muted-foreground font-mono">{formatNaira(fee)}</td>
-                    <td className="px-5 py-3 text-right text-emerald font-semibold font-mono">{formatNaira(net)}</td>
+                    <td className={`px-5 py-3 text-right font-semibold ${isDebit ? "text-rose-700" : "text-emerald-700"}`}>
+                      {isDebit ? formatSignedNaira(p.amount) : `+${formatNaira(Number(p.amount) || 0)}`}
+                    </td>
+                    <td className="px-5 py-3 text-right text-muted-foreground font-mono">{formatSignedNaira(fee)}</td>
+                    <td className={`px-5 py-3 text-right font-semibold font-mono ${isDebit ? "text-rose-700" : "text-emerald"}`}>{formatSignedNaira(net)}</td>
                     <td className="px-5 py-3 text-muted-foreground">{p.date}</td>
-                    <td className="px-5 py-3"><StatusBadge status={p.status.toLowerCase() === "matched" || p.status.toLowerCase() === "paid" ? "paid" : p.status.toLowerCase() === "overpaid" ? "overpaid" : "partial"} /></td>
+                    <td className="px-5 py-3"><StatusBadge status={p.status?.toLowerCase() === "matched" || p.status?.toLowerCase() === "paid" ? "paid" : p.status?.toLowerCase() === "overpaid" ? "overpaid" : "partial"} /></td>
                   </tr>
                 );
               })}
@@ -191,7 +207,7 @@ function Page() {
                 <td className="py-2.5 font-semibold">{t.org}</td>
                 <td className="py-2.5">{t.vendor}</td>
                 <td className="py-2.5 font-mono">{t.account}</td>
-                <td className="py-2.5 text-right font-mono font-semibold">₦{Number(t.amount).toLocaleString("en-NG")}</td>
+                <td className="py-2.5 text-right font-mono font-semibold">{formatSignedNaira(t.amount)}</td>
                 <td className="py-2.5 text-slate-500">{t.date}</td>
                 <td className="py-2.5 font-bold uppercase text-[9px]">{t.status}</td>
               </tr>

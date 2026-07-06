@@ -1,0 +1,24 @@
+# Checklist: Duesly Production Integrations & AI Systems
+
+- [x] Update `.env` with Resend, Gemini, and Cloudinary keys
+- [x] Create Resend email dispatch client in `src/lib/email.ts`
+- [x] Create Gemini AI integration helper in `src/lib/gemini.ts`
+- [x] Implement Nomba virtual account simulation in `src/lib/db-actions.ts`
+- [x] Implement CSV parser and bulk upload action in `src/lib/db-actions.ts`
+- [x] Implement `getAICoachInsights` server action in `src/lib/db-actions.ts`
+- [x] Wire up dashboard to display Gemini AI insights with clean loading states
+- [x] Add CSV File Uploader to the Vendors screen and link to database bulk insertion
+- [x] Refine Landing Page buttons and routing to be production-ready (no "demo" text)
+- [x] Re-run compiler build checks
+- [x] Remove sparkles and trusted badges from Hero Section
+- [x] Add 3-tier Pricing Matrix (Free, Professional, Custom)
+- [x] Create fully functional Contact form wired to Resend
+- [x] Create Privacy Policy and Terms of Service legal pages
+- [x] Implement database login credentials check
+- [x] Seed chuksy3@gmail.com with password Duesly7817##** as super-admin
+- [x] Enable updating admin/super-admin profiles and passwords inside settings pages
+- [x] Remove Gemini branding (strictly refer to AI)
+- [x] Implement interactive chatbot prompt field inside AI Coach dashboard card
+- [x] Update support details to support@theduesly.com and call sales line +234 (0) 706 573 7817
+- [x] Add Solutions dropdown wrapper mapping Markets, Estates, Cooperatives, and Trade Groups pages
+- [x] Add infinite marquee CSS logo scroll banner displaying active organizations

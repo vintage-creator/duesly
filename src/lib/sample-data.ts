@@ -106,8 +106,11 @@ export const platformStats = {
   activeOrgs: 41,
 };
 
-export const formatNaira = (n: number) =>
-  new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(n);
+export const formatNaira = (n: number) => {
+  const amount = Number(n) || 0;
+  const sign = amount < 0 ? "-" : "";
+  return `${sign}${new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(Math.abs(amount))}`;
+};
 
 export const formatNumber = (n: number) =>
   new Intl.NumberFormat("en-US").format(n);

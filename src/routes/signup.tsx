@@ -4,8 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthShell } from "./login";
 import { toast } from "sonner";
-import { useState, useEffect } from "react";
-import { ArrowRight, ArrowLeft, KeyRound, Building, User } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { ArrowRight, ArrowLeft, KeyRound, Building, User, Search, Eye, EyeOff } from "lucide-react";
 import { registerUser, verifyOTP, registerMember, getActiveOrganizations } from "@/lib/db-actions";
 
 export const Route = createFileRoute("/signup")({
@@ -27,6 +27,18 @@ function Signup() {
   const [role, setRole] = useState<"admin" | "vendor">("admin");
   const [activeOrgs, setActiveOrgs] = useState<{ id: string; name: string; type: string }[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const filteredOrgs = useMemo(() => {
+    if (!searchQuery.trim()) return activeOrgs;
+    const lower = searchQuery.toLowerCase();
+    return activeOrgs.filter(org => 
+      org.name.toLowerCase().includes(lower) || 
+      org.type.toLowerCase().includes(lower)
+    );
+  }, [activeOrgs, searchQuery]);
   const [phone, setPhone] = useState("");
   const [coordinate, setCoordinate] = useState("");
   const [section, setSection] = useState("");
@@ -66,9 +78,16 @@ function Signup() {
         toast.error("Please enter your first and last names");
         return;
       }
-      if (role === "vendor" && (!phone.trim() || !coordinate.trim() || !section.trim())) {
-        toast.error("Please complete all member details");
-        return;
+      if (role === "vendor") {
+        if (!phone.trim() || !coordinate.trim() || !section.trim()) {
+          toast.error("Please complete all member details");
+          return;
+        }
+        const cleanPhone = phone.replace(/[\s-+]/g, "");
+        if (!/^[0-9]{10,15}$/.test(cleanPhone)) {
+          toast.error("Please enter a valid phone number (10 to 15 digits)");
+          return;
+        }
       }
     }
     setStep((prev) => Math.min(prev + 1, 4));
@@ -87,6 +106,17 @@ function Signup() {
 
     if (!email.trim() || !password.trim()) {
       toast.error("Please enter your email and password");
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters long");
       return;
     }
 
@@ -232,6 +262,18 @@ function Signup() {
     : selectedOrgType === "Cooperative" 
       ? "Department / Division" 
       : "Market Section / Line";
+
+  const coordinatePlaceholder = selectedOrgType === "Estate" 
+    ? "e.g. House 4, Street 2" 
+    : selectedOrgType === "Cooperative" 
+      ? "e.g. EMP-992" 
+      : "e.g. Block B-42";
+
+  const sectionPlaceholder = selectedOrgType === "Estate" 
+    ? "e.g. Phase 2" 
+    : selectedOrgType === "Cooperative" 
+      ? "e.g. Accounts Dept" 
+      : "e.g. Main Line";
 
   const getOrgPlaceholder = () => {
     switch (orgType) {
@@ -417,7 +459,24 @@ function Signup() {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="password">Create password (min 6 chars)</Label>
-                  <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+                  <div className="relative">
+                    <Input 
+                      id="password" 
+                      type={showPassword ? "text" : "password"} 
+                      required 
+                      value={password} 
+                      onChange={(e) => setPassword(e.target.value)} 
+                      placeholder="••••••••" 
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Anti-Fraud Settlement Policy Box */}
@@ -464,24 +523,83 @@ function Signup() {
           <>
             {/* MEMBER STEP 2: FIND ASSOCIATION */}
             {step === 2 && (
-              <div className="space-y-4 animate-fade-in-up">
-                <div className="space-y-1.5">
-                  <Label htmlFor="select-org">Select your Organization</Label>
-                  <select
-                    id="select-org"
-                    required
-                    value={selectedOrgId}
-                    onChange={(e) => setSelectedOrgId(e.target.value)}
-                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="">-- Choose Organization --</option>
-                    {activeOrgs.map(org => (
-                      <option key={org.id} value={org.id}>{org.name} ({org.type})</option>
-                    ))}
-                  </select>
+              <div className="space-y-4 animate-fade-in-up relative z-20">
+                <div className="space-y-1.5 relative">
+                  <Label>Select your Association</Label>
+                  
+                  {/* Custom Dropdown Trigger */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setDropdownOpen(!dropdownOpen)}
+                      className="flex h-11 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-left cursor-pointer"
+                    >
+                      {selectedOrg ? (
+                        <span className="font-semibold text-foreground">
+                          {selectedOrg.name} ({selectedOrg.type})
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">Choose Association / Organization...</span>
+                      )}
+                      <span className="pointer-events-none ml-2 text-slate-400">▼</span>
+                    </button>
+
+                    {/* Dropdown Menu Popup */}
+                    {dropdownOpen && (
+                      <div className="absolute left-0 right-0 z-50 mt-1 max-h-64 overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-lg animate-fade-in">
+                        {/* Integrated Search Input */}
+                        <div className="flex items-center border-b px-3 py-2 bg-slate-50/50">
+                          <Search className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                          <input
+                            type="text"
+                            placeholder="Type to search..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="flex h-8 w-full rounded-md bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                            autoFocus
+                          />
+                        </div>
+                        
+                        {/* Scrollable Association List */}
+                        <div className="max-h-48 overflow-y-auto p-1 space-y-0.5">
+                          {filteredOrgs.map((org) => (
+                            <button
+                              key={org.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedOrgId(org.id);
+                                setDropdownOpen(false);
+                              }}
+                              className={`flex w-full items-center rounded-lg px-3 py-2 text-sm text-left transition-colors hover:bg-slate-50 cursor-pointer ${
+                                selectedOrgId === org.id ? "bg-slate-100/80 text-foreground font-semibold" : "text-muted-foreground"
+                              }`}
+                            >
+                              <div className="flex-1">
+                                <p className="font-medium text-foreground">{org.name}</p>
+                                <p className="text-[10px] text-muted-foreground">{org.type} · ID: {org.id}</p>
+                              </div>
+                            </button>
+                          ))}
+                          {filteredOrgs.length === 0 && (
+                            <div className="py-6 text-center text-xs text-muted-foreground">
+                              No organizations found.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Backdrop Closer */}
+                  {dropdownOpen && (
+                    <div 
+                      className="fixed inset-0 z-40 bg-transparent" 
+                      onClick={() => setDropdownOpen(false)} 
+                    />
+                  )}
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 relative z-10">
                   <Button type="button" onClick={prevStep} variant="outline" size="lg" className="flex-1">
                     <ArrowLeft className="h-4 w-4 mr-1" /> Back
                   </Button>
@@ -509,11 +627,11 @@ function Signup() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="coord">{coordinateLabel}</Label>
-                    <Input id="coord" required value={coordinate} onChange={(e) => setCoordinate(e.target.value)} placeholder="e.g. Block B-42" />
+                    <Input id="coord" required value={coordinate} onChange={(e) => setCoordinate(e.target.value)} placeholder={coordinatePlaceholder} />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="sect">{sectionLabel}</Label>
-                    <Input id="sect" required value={section} onChange={(e) => setSection(e.target.value)} placeholder="e.g. Main Line" />
+                    <Input id="sect" required value={section} onChange={(e) => setSection(e.target.value)} placeholder={sectionPlaceholder} />
                   </div>
                 </div>
 
@@ -542,7 +660,24 @@ function Signup() {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="password">Create password (min 6 chars)</Label>
-                  <Input id="password" type="password" required value={password} placeholder="••••••••" />
+                  <div className="relative">
+                    <Input 
+                      id="password" 
+                      type={showPassword ? "text" : "password"} 
+                      required 
+                      value={password} 
+                      onChange={(e) => setPassword(e.target.value)} 
+                      placeholder="••••••••" 
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-1.5 pt-1">

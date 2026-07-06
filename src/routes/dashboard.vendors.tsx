@@ -11,7 +11,7 @@ import { Plus, Search, Filter, Copy, Phone, MapPin, Upload, LayoutGrid, List } f
 import { formatNaira } from "@/lib/sample-data";
 import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
-import { getVendors, createVendor, getVendorHistory, importVendorsCSV, sendPaymentReminder, shareVendorReceipts } from "@/lib/db-actions";
+import { getVendors, createVendor, getVendorHistory, importVendorsCSV, sendPaymentReminder, shareVendorReceipts, getDashboardData } from "@/lib/db-actions";
 import * as XLSX from "xlsx";
 
 type Vendor = {
@@ -40,6 +40,7 @@ function Page() {
 
   const [activeOrgId, setActiveOrgId] = useState("ORG-001");
   const [vendorsList, setVendorsList] = useState<Vendor[]>(vendors);
+  const [hydrating, setHydrating] = useState(true);
 
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<string>("all");
@@ -55,6 +56,8 @@ function Page() {
   const [shop, setShop] = useState("");
   const [section, setSection] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [orgPhone, setOrgPhone] = useState<string | null>("active");
+  const [orgAddress, setOrgAddress] = useState<string | null>("active");
 
   // Load organization-scoped vendors & settings
   useEffect(() => {
@@ -64,14 +67,26 @@ function Page() {
       if (parsed.org_type) {
         setOrgType(parsed.org_type);
       }
-      if (parsed.org_id && parsed.org_id !== "ORG-001") {
+      if (parsed.org_id) {
         setActiveOrgId(parsed.org_id);
         getVendors({ data: { orgId: parsed.org_id } })
           .then((res) => {
             setVendorsList(res);
           })
+          .catch(console.error)
+          .finally(() => setHydrating(false));
+
+        getDashboardData({ data: { orgId: parsed.org_id } })
+          .then((res: any) => {
+            setOrgPhone(res.orgPhone || null);
+            setOrgAddress(res.orgAddress || null);
+          })
           .catch(console.error);
+      } else {
+        setHydrating(false);
       }
+    } else {
+      setHydrating(false);
     }
   }, [vendors]);
 
@@ -238,59 +253,84 @@ function Page() {
     }
   };
 
+  const isProfileIncomplete = orgPhone === null || orgAddress === null;
+
   return (
     <OrgShell
       title={pluralLabel}
       subtitle={`Manage every ${singularLabel.toLowerCase()}, their virtual account and balances.`}
       actions={
-        <>
-          <label className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-secondary border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-secondary/80 gap-1.5 transition-colors shadow-soft h-10">
-            <Upload className="h-4 w-4" /> Bulk Import
-            <input
-              type="file"
-              accept=".csv, .xlsx, .xls"
-              className="hidden"
-              onChange={handleFileUpload}
-            />
-          </label>
+        isProfileIncomplete ? undefined : (
+          <>
+            <label className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-secondary border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-secondary/80 gap-1.5 transition-colors shadow-soft h-10">
+              <Upload className="h-4 w-4" /> Bulk Import
+              <input
+                type="file"
+                accept=".csv, .xlsx, .xls"
+                className="hidden"
+                onChange={handleFileUpload}
+              />
+            </label>
 
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="hero" onClick={() => setDialogOpen(true)}>
-                <Plus className="h-4 w-4" /> Add {singularLabel}
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Add new {singularLabel.toLowerCase()}</DialogTitle></DialogHeader>
-              <form onSubmit={handleAddVendor} className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Full name</Label>
-                    <Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Chinedu Okafor" />
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="hero" onClick={() => setDialogOpen(true)}>
+                  <Plus className="h-4 w-4" /> Add {singularLabel}
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Add new {singularLabel.toLowerCase()}</DialogTitle></DialogHeader>
+                <form onSubmit={handleAddVendor} className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Full name</Label>
+                      <Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Chinedu Okafor" />
+                    </div>
+                    <div>
+                      <Label>Phone</Label>
+                      <Input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+234 …" />
+                    </div>
+                    <div>
+                      <Label>{coordinateLabel}</Label>
+                      <Input required value={shop} onChange={(e) => setShop(e.target.value)} placeholder="B-12" />
+                    </div>
+                    <div>
+                      <Label>{sectionLabel}</Label>
+                      <Input required value={section} onChange={(e) => setSection(e.target.value)} placeholder="Textile Line" />
+                    </div>
                   </div>
-                  <div>
-                    <Label>Phone</Label>
-                    <Input required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+234 …" />
-                  </div>
-                  <div>
-                    <Label>{coordinateLabel}</Label>
-                    <Input required value={shop} onChange={(e) => setShop(e.target.value)} placeholder="B-12" />
-                  </div>
-                  <div>
-                    <Label>{sectionLabel}</Label>
-                    <Input required value={section} onChange={(e) => setSection(e.target.value)} placeholder="Textile Line" />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="hero" type="submit">Create {singularLabel.toLowerCase()}</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </>
+                  <DialogFooter>
+                    <Button variant="hero" type="submit">Create {singularLabel.toLowerCase()}</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </>
+        )
       }
     >
-      <div className="rounded-2xl border bg-card shadow-soft">
+      {hydrating ? (
+        <div className="flex min-h-[360px] items-center justify-center rounded-2xl border bg-card shadow-soft">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald border-t-transparent" />
+        </div>
+      ) : isProfileIncomplete ? (
+        <div className="flex flex-col items-center justify-center border border-dashed rounded-3xl bg-card p-12 text-center shadow-soft py-16">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 text-amber-500 mb-4 border border-amber-100">
+            <MapPin className="h-8 w-8" />
+          </div>
+          <h3 className="font-display text-xl font-bold text-navy">Complete Profile Required</h3>
+          <p className="mt-2 text-sm text-slate-500 max-w-md leading-relaxed">
+            Before you can onboard {pluralLabel.toLowerCase()} (residents or vendors) or create virtual accounts, you must configure your organization's physical <strong className="font-semibold text-foreground">Address</strong> and <strong className="font-semibold text-foreground">Contact Phone Number</strong> in Settings.
+          </p>
+          <div className="mt-6 flex gap-3">
+            <Button variant="hero" onClick={() => router.navigate({ to: "/dashboard/settings" })} className="cursor-pointer">
+              Go to Settings Profile
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="rounded-2xl border bg-card shadow-soft">
         <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -482,7 +522,7 @@ function Page() {
                     <button onClick={() => { navigator.clipboard?.writeText(active.virtualAccount); toast.success("Account number copied to clipboard"); }}
                       className="rounded-lg bg-white/15 p-2 hover:bg-white/25"><Copy className="h-4 w-4" /></button>
                   </div>
-                  <p className="mt-1 text-xs text-white/70">Nomba Account Number · Powered by Nomba</p>
+                  <p className="mt-1 text-xs text-white/70">Nomba Account Number · Powered by Nomba MFB</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -544,6 +584,8 @@ function Page() {
           )}
         </SheetContent>
       </Sheet>
+      </>
+      )}
     </OrgShell>
   );
 }

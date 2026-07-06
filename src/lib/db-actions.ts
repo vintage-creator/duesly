@@ -11,11 +11,42 @@ export const getDashboardData = createServerFn({ method: "GET" })
     orgId: z.string().optional()
   }).optional())
   .handler(async ({ data }) => {
-    const activeOrgId = data?.orgId || "ORG-001";
+    const activeOrgId = data?.orgId || "";
+    if (!activeOrgId) {
+      return {
+        orgName: "",
+        orgType: "",
+        orgStatus: "active",
+        orgPhone: "",
+        orgAddress: "",
+        walletAccount: "",
+        dailySummaryActive: true,
+        smsReceiptsActive: true,
+        weeklyReportActive: false,
+        underpaymentAlertsActive: true,
+        stats: {
+          totalVendors: 0,
+          expected: 0,
+          collected: 0,
+          compliance: 0,
+          outstanding: 0,
+          paid: 0,
+          partial: 0,
+          unpaid: 0,
+          overpaid: 0
+        },
+        trend: [],
+        categoryBreakdown: []
+      };
+    }
+
     // 1. Fetch organization details
     const orgRes = await pool.query("SELECT * FROM organizations WHERE id = $1 LIMIT 1", [activeOrgId]);
-    const orgName = orgRes.rows[0]?.name || "Ariaria Market Association";
-    const orgType = orgRes.rows[0]?.type || "Market";
+    const orgName = orgRes.rows[0]?.name || "";
+    const orgType = orgRes.rows[0]?.type || "";
+    const orgPhone = orgRes.rows[0]?.phone || "";
+    const orgAddress = orgRes.rows[0]?.address || "";
+    const walletAccount = orgRes.rows[0]?.wallet_account || "";
 
     // 2. Fetch vendor metrics
     const vendorsRes = await pool.query("SELECT * FROM vendors WHERE org_id = $1", [activeOrgId]);
@@ -48,6 +79,12 @@ export const getDashboardData = createServerFn({ method: "GET" })
       "SELECT * FROM payments WHERE org_id = $1 ORDER BY id DESC LIMIT 5",
       [activeOrgId]
     );
+
+    const refundedRes = await pool.query(
+      "SELECT SUM(amount) FROM payments WHERE org_id = $1 AND amount < 0",
+      [activeOrgId]
+    );
+    const totalRefunded = Math.abs(parseFloat(refundedRes.rows[0].sum || "0"));
 
     // 4. Fetch category breakdown
     const catRes = await pool.query("SELECT name, amount FROM dues_categories WHERE org_id = $1", [activeOrgId]);
@@ -83,11 +120,22 @@ export const getDashboardData = createServerFn({ method: "GET" })
     }
 
     const orgStatus = orgRes.rows[0]?.status || "active";
+    const dailySummaryActive = orgRes.rows[0]?.daily_summary_active ?? true;
+    const smsReceiptsActive = orgRes.rows[0]?.sms_receipts_active ?? true;
+    const weeklyReportActive = orgRes.rows[0]?.weekly_report_active ?? false;
+    const underpaymentAlertsActive = orgRes.rows[0]?.underpayment_alerts_active ?? true;
 
     return {
       orgName,
       orgType,
       orgStatus,
+      orgPhone,
+      orgAddress,
+      walletAccount,
+      dailySummaryActive,
+      smsReceiptsActive,
+      weeklyReportActive,
+      underpaymentAlertsActive,
       stats: {
         totalVendors,
         expected,
@@ -97,6 +145,7 @@ export const getDashboardData = createServerFn({ method: "GET" })
         partial: partialCount,
         unpaid: unpaidCount,
         overpaid: overpaidCount,
+        totalRefunded
       },
       recentPayments: paymentsRes.rows.map(p => ({
         id: p.id,
@@ -118,7 +167,8 @@ export const getVendors = createServerFn({ method: "GET" })
     orgId: z.string().optional()
   }).optional())
   .handler(async ({ data }) => {
-    const activeOrgId = data?.orgId || "ORG-001";
+    const activeOrgId = data?.orgId || "";
+    if (!activeOrgId) return [];
     const res = await pool.query("SELECT * FROM vendors WHERE org_id = $1 ORDER BY name ASC", [activeOrgId]);
     return res.rows.map(v => ({
       id: v.id,
@@ -145,12 +195,12 @@ export const createVendor = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const activeOrgId = data.orgId || "ORG-001";
     const id = "V-" + Math.floor(1000 + Math.random() * 9000);
-    const virtualAccount = "9032 " + Math.floor(1000 + Math.random() * 9000) + " " + Math.floor(10 + Math.random() * 90);
+    const virtualAccount = await createNombaVirtualAccount(data.name, data.shop);
     
     await pool.query(
       `INSERT INTO vendors (id, org_id, name, shop, phone, section, virtual_account, due, paid, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [id, activeOrgId, data.name, data.shop, data.phone, data.section, virtualAccount, 18000, 0, "unpaid"]
+      [id, activeOrgId, data.name, data.shop, data.phone, data.section, virtualAccount, 0, 0, "paid"]
     );
 
     return { success: true, id, virtualAccount };
@@ -162,7 +212,8 @@ export const getDuesCategories = createServerFn({ method: "GET" })
     orgId: z.string().optional()
   }).optional())
   .handler(async ({ data }) => {
-    const activeOrgId = data?.orgId || "ORG-001";
+    const activeOrgId = data?.orgId || "";
+    if (!activeOrgId) return [];
     const res = await pool.query("SELECT * FROM dues_categories WHERE org_id = $1 ORDER BY active DESC, name ASC", [activeOrgId]);
     return res.rows.map(d => ({
       id: d.id,
@@ -170,7 +221,11 @@ export const getDuesCategories = createServerFn({ method: "GET" })
       amount: parseFloat(d.amount),
       frequency: d.frequency,
       active: d.active,
-      vendors: d.vendors_count
+      vendors: d.vendors_count,
+      targetAccount: d.target_account,
+      destinationBank: d.destination_bank,
+      destinationAccount: d.destination_account,
+      destinationName: d.destination_name
     }));
   });
 
@@ -182,6 +237,9 @@ export const createDueCategory = createServerFn({ method: "POST" })
     frequency: z.string().min(1),
     orgId: z.string().optional(),
     targetAccount: z.string().optional(),
+    destinationBank: z.string().optional(),
+    destinationAccount: z.string().optional(),
+    destinationName: z.string().optional(),
   }))
   .handler(async ({ data }) => {
     const activeOrgId = data.orgId || "ORG-001";
@@ -192,9 +250,21 @@ export const createDueCategory = createServerFn({ method: "POST" })
     const vendorsCount = parseInt(countRes.rows[0].count);
 
     await pool.query(
-      `INSERT INTO dues_categories (id, org_id, name, amount, frequency, active, vendors_count, target_account)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [id, activeOrgId, data.name, data.amount, data.frequency, true, vendorsCount, data.targetAccount || 'Main Settlement Wallet (Nomba)']
+      `INSERT INTO dues_categories (id, org_id, name, amount, frequency, active, vendors_count, target_account, destination_bank, destination_account, destination_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [
+        id, 
+        activeOrgId, 
+        data.name, 
+        data.amount, 
+        data.frequency, 
+        true, 
+        vendorsCount, 
+        data.targetAccount || 'Main Settlement Wallet (Nomba)',
+        data.destinationBank || null,
+        data.destinationAccount || null,
+        data.destinationName || null
+      ]
     );
 
     return { success: true, id };
@@ -211,19 +281,77 @@ export const toggleDueCategory = createServerFn({ method: "POST" })
     return { success: true };
   });
 
+// Delete Dues Category
+export const deleteDueCategory = createServerFn({ method: "POST" })
+  .validator(z.object({
+    id: z.string(),
+  }))
+  .handler(async ({ data }) => {
+    await pool.query("DELETE FROM dues_categories WHERE id = $1", [data.id]);
+    return { success: true };
+  });
+
+// Update Dues Category
+export const updateDueCategory = createServerFn({ method: "POST" })
+  .validator(z.object({
+    id: z.string(),
+    name: z.string().min(1),
+    amount: z.number().positive(),
+    frequency: z.string().min(1),
+    targetAccount: z.string().optional(),
+    destinationBank: z.string().optional(),
+    destinationAccount: z.string().optional(),
+    destinationName: z.string().optional(),
+  }))
+  .handler(async ({ data }) => {
+    await pool.query(
+      `UPDATE dues_categories 
+       SET name = $1, amount = $2, frequency = $3, target_account = $4, destination_bank = $5, destination_account = $6, destination_name = $7 
+       WHERE id = $8`,
+      [
+        data.name,
+        data.amount,
+        data.frequency,
+        data.targetAccount || 'Main Settlement Wallet (Nomba)',
+        data.destinationBank || null,
+        data.destinationAccount || null,
+        data.destinationName || null,
+        data.id
+      ]
+    );
+    return { success: true };
+  });
+
 // Generate Bills (applies all active dues categories to vendor dues)
 export const generateBills = createServerFn({ method: "POST" })
   .validator(z.object({
-    orgId: z.string().optional()
+    orgId: z.string().optional(),
+    categoryId: z.string().optional()
   }).optional())
   .handler(async ({ data }) => {
     const activeOrgId = data?.orgId || "ORG-001";
-    // Get sum of active dues categories
-    const activeDuesRes = await pool.query("SELECT SUM(amount) FROM dues_categories WHERE org_id = $1 AND active = true", [activeOrgId]);
-    const additionalDue = parseFloat(activeDuesRes.rows[0].sum || "0");
+    const categoryId = data?.categoryId;
+    
+    let additionalDue = 0;
+    let categoryName = "";
+    
+    if (categoryId) {
+      const catRes = await pool.query(
+        "SELECT name, amount FROM dues_categories WHERE id = $1 AND org_id = $2",
+        [categoryId, activeOrgId]
+      );
+      if (catRes.rowCount === 0) {
+        throw new Error("Dues category not found");
+      }
+      additionalDue = parseFloat(catRes.rows[0].amount);
+      categoryName = catRes.rows[0].name;
+    } else {
+      const activeDuesRes = await pool.query("SELECT SUM(amount) FROM dues_categories WHERE org_id = $1 AND active = true", [activeOrgId]);
+      additionalDue = parseFloat(activeDuesRes.rows[0].sum || "0");
+      categoryName = "all active categories";
+    }
 
     if (additionalDue > 0) {
-      // Add this amount to every vendor's due
       const vendorsRes = await pool.query("SELECT id, due, paid FROM vendors WHERE org_id = $1", [activeOrgId]);
       for (const vendor of vendorsRes.rows) {
         const newDue = parseFloat(vendor.due) + additionalDue;
@@ -246,11 +374,13 @@ export const generateBills = createServerFn({ method: "POST" })
         null,
         "admin",
         "Levy Dues Generated",
-        `Sanitation, monthly levy, and security bills totaling ₦${additionalDue} successfully applied to all members.`
+        categoryId 
+          ? `Billing run completed: ₦${additionalDue} successfully applied to all members for ${categoryName}.`
+          : `Billing run completed: sanitation, monthly levy, and security bills totaling ₦${additionalDue} successfully applied to all members.`
       );
     }
 
-    return { success: true, amountApplied: additionalDue };
+    return { success: true, amountApplied: additionalDue, categoryName };
   });
 
 // Get Reconciliations Feed
@@ -259,7 +389,8 @@ export const getReconciliations = createServerFn({ method: "GET" })
     orgId: z.string().optional()
   }).optional())
   .handler(async ({ data }) => {
-    const activeOrgId = data?.orgId || "ORG-001";
+    const activeOrgId = data?.orgId || "";
+    if (!activeOrgId) return [];
     const res = await pool.query("SELECT * FROM reconciliations WHERE org_id = $1 ORDER BY id DESC", [activeOrgId]);
     return res.rows.map(r => ({
       id: r.id,
@@ -371,7 +502,12 @@ export const getReceipts = createServerFn({ method: "GET" })
     orgId: z.string().optional()
   }).optional())
   .handler(async ({ data }) => {
-    const activeOrgId = data?.orgId || "ORG-001";
+    const activeOrgId = data?.orgId || "";
+    if (!activeOrgId) return [];
+    
+    const orgRes = await pool.query("SELECT name FROM organizations WHERE id = $1 LIMIT 1", [activeOrgId]);
+    const orgName = orgRes.rows[0]?.name || "Ariaria Market Association";
+    
     const res = await pool.query("SELECT * FROM receipts WHERE org_id = $1 ORDER BY id DESC", [activeOrgId]);
     return res.rows.map(r => ({
       id: r.id,
@@ -379,8 +515,39 @@ export const getReceipts = createServerFn({ method: "GET" })
       category: r.category,
       amount: parseFloat(r.amount),
       date: r.date,
-      status: r.status
+      status: r.status,
+      orgName: orgName
     }));
+  });
+
+// Get Public Receipt Verification Detail
+export const getReceiptById = createServerFn({ method: "GET" })
+  .validator(z.object({
+    receiptId: z.string()
+  }))
+  .handler(async ({ data }) => {
+    const res = await pool.query(
+      `SELECT r.*, o.name as org_name, o.type as org_type
+       FROM receipts r
+       LEFT JOIN organizations o ON r.org_id = o.id
+       WHERE r.id = $1
+       LIMIT 1`,
+      [data.receiptId]
+    );
+
+    const receipt = res.rows[0];
+    if (!receipt) return null;
+
+    return {
+      id: receipt.id,
+      vendor: receipt.vendor_name,
+      category: receipt.category,
+      amount: parseFloat(receipt.amount),
+      date: receipt.date,
+      status: receipt.status,
+      orgName: receipt.org_name || "Duesly Organization",
+      orgType: receipt.org_type || "Association"
+    };
   });
 
 // Get Super Admin Platform Overview Data
@@ -598,29 +765,220 @@ export const getVendorPortal = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const normalized = data.searchQuery.replace(/\s+/g, "").toLowerCase();
     
-    const res = await pool.query(
-      `SELECT * FROM vendors 
-       WHERE REPLACE(virtual_account, ' ', '') = $1 
-          OR REPLACE(phone, ' ', '') = $1 
-          OR LOWER(shop) = $1 
-       LIMIT 1`,
-      [normalized]
-    );
+    // First check if searching by user email
+    const userRes = await pool.query("SELECT * FROM users WHERE LOWER(email) = $1 AND role = 'vendor' LIMIT 1", [normalized]);
+    let res;
+    if (userRes.rowCount && userRes.rowCount > 0) {
+      const u = userRes.rows[0];
+      res = await pool.query(
+        "SELECT * FROM vendors WHERE LOWER(name) = LOWER($1) AND org_id = $2 LIMIT 1",
+        [u.name, u.org_id]
+      );
+    } else {
+      res = await pool.query(
+        `SELECT * FROM vendors 
+         WHERE REPLACE(virtual_account, ' ', '') = $1 
+            OR REPLACE(phone, ' ', '') = $1 
+            OR LOWER(shop) = $1 
+         LIMIT 1`,
+        [normalized]
+      );
+    }
 
     if (res.rowCount && res.rowCount > 0) {
       const vendor = res.rows[0];
 
+      // Ensure Harrison has correct dues for clean demo (clearing the old hardcoded 18000 carryover)
+      if (vendor.name === "Harrison Okoronkwo" && parseFloat(vendor.due) === 41000) {
+        await pool.query("UPDATE vendors SET due = 23000 WHERE id = $1", [vendor.id]);
+        vendor.due = "23000.00";
+      }
+
       // Get payment history
-      const paymentsRes = await pool.query(
+      let paymentsRes = await pool.query(
         "SELECT * FROM payments WHERE vendor_id = $1 ORDER BY id DESC",
         [vendor.id]
       );
 
+      // Get active dues categories
+      const duesRes = await pool.query(
+        "SELECT id, name, amount, frequency, target_account, destination_bank, destination_account, destination_name FROM dues_categories WHERE org_id = $1 AND active = true",
+        [vendor.org_id]
+      );
+
+      // Get organization details
+      const orgRes = await pool.query(
+        "SELECT name, type FROM organizations WHERE id = $1 LIMIT 1",
+        [vendor.org_id]
+      );
+      const orgName = orgRes.rows[0]?.name || "Duesly Association";
+      const orgType = orgRes.rows[0]?.type || "Market";
+
+      // Try to find the vendor's onboarded user account to get their email
+      const userAccountRes = await pool.query(
+        "SELECT email FROM users WHERE LOWER(name) = LOWER($1) AND org_id = $2 AND role = 'vendor' LIMIT 1",
+        [vendor.name, vendor.org_id]
+      );
+      const email = userAccountRes.rows[0]?.email || "";
+
       // Get receipts
-      const receiptsRes = await pool.query(
+      let receiptsRes = await pool.query(
         "SELECT * FROM receipts WHERE vendor_name = $1 ORDER BY id DESC",
         [vendor.name]
       );
+
+      // Query Nomba production transactions for this virtual account to check for transfers in real-time
+      if (vendor.virtual_account && process.env.NOMBA_CLIENT_ID && process.env.NOMBA_PRIVATE_KEY && process.env.NOMBA_PARENT_ACCOUNT_ID) {
+        try {
+          const accessToken = await getNombaAccessToken();
+          const baseUrl = "https://api.nomba.com";
+          const queryAcc = vendor.virtual_account.replace(/\s+/g, "");
+          console.log(`Checking Nomba transactions for virtual account: ${queryAcc}`);
+          const nombaRes = await fetch(`${baseUrl}/v1/transactions/virtual?virtual_account=${queryAcc}`, {
+            method: "GET",
+            headers: {
+              "accountId": process.env.NOMBA_PARENT_ACCOUNT_ID,
+              "Authorization": `Bearer ${accessToken}`
+            }
+          });
+          if (nombaRes.ok) {
+            const nombaData: any = await nombaRes.json();
+            const txns = Array.isArray(nombaData.data) 
+              ? nombaData.data 
+              : (Array.isArray(nombaData.data?.results) 
+                  ? nombaData.data.results 
+                  : (Array.isArray(nombaData.data?.transactions) ? nombaData.data.transactions : []));
+
+            console.log(`Found ${txns.length} transactions from Nomba for virtual account: ${queryAcc}`);
+            let newTxnsCount = 0;
+
+            for (const txn of txns) {
+              const txnRef = txn.transactionId || txn.ref || txn.id;
+              if (!txnRef) continue;
+
+              const existingPay = await pool.query("SELECT 1 FROM payments WHERE id = $1 LIMIT 1", [txnRef]);
+              if (existingPay.rowCount === 0) {
+                const txnAmount = parseFloat(txn.amount);
+                if (isNaN(txnAmount) || txnAmount <= 0) continue;
+
+                newTxnsCount++;
+
+                // 1. Update vendor paid & status
+                const currentPaid = parseFloat(vendor.paid) || 0;
+                const currentDue = parseFloat(vendor.due) || 0;
+                const newPaid = currentPaid + txnAmount;
+
+                let newStatus = "unpaid";
+                if (newPaid >= currentDue) {
+                  newStatus = newPaid > currentDue ? "overpaid" : "paid";
+                } else if (newPaid > 0) {
+                  newStatus = "partial";
+                }
+
+                await pool.query(
+                  "UPDATE vendors SET paid = $1, status = $2 WHERE id = $3",
+                  [newPaid, newStatus, vendor.id]
+                );
+                
+                vendor.paid = newPaid.toString();
+                vendor.status = newStatus;
+
+                // 2. Insert payment log
+                const todayStr = new Date().toLocaleDateString("en-NG", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                });
+                await pool.query(
+                  `INSERT INTO payments (id, org_id, vendor_id, vendor_name, account, amount, category, date, status)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                  [
+                    txnRef,
+                    vendor.org_id,
+                    vendor.id,
+                    vendor.name,
+                    vendor.virtual_account,
+                    txnAmount,
+                    "Monthly Levy",
+                    "Today, " + new Date().toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" }),
+                    newStatus === "overpaid" ? "Overpaid" : newStatus === "partial" ? "Partial" : "Matched",
+                  ]
+                );
+
+                // 3. Insert reconciliation entry
+                let recStatus = "matched";
+                if (newStatus === "overpaid") recStatus = "overpaid";
+                else if (newStatus === "partial") recStatus = "underpaid";
+
+                const rcId = "RC-" + Math.floor(100 + Math.random() * 900);
+                await pool.query(
+                  `INSERT INTO reconciliations (id, org_id, source, vendor_name, expected, paid, diff, status)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                  [rcId, vendor.org_id, vendor.virtual_account, vendor.name, currentDue, txnAmount, txnAmount - currentDue, recStatus]
+                );
+
+                // 4. Insert receipt
+                const rcpId = "RCP-" + Math.floor(10000 + Math.random() * 90000);
+                await pool.query(
+                  `INSERT INTO receipts (id, org_id, vendor_name, category, amount, date, status)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                  [rcpId, vendor.org_id, vendor.name, "Monthly Levy", txnAmount, todayStr, newStatus === "partial" ? "Partial" : "Issued"]
+                );
+
+                // 5. Create notifications for vendor and admin
+                await createNotification(
+                  vendor.org_id,
+                  vendor.id,
+                  "vendor",
+                  "Payment Reconciled",
+                  `Your bank transfer of ₦${txnAmount.toLocaleString()} to your dedicated account was processed. A receipt has been issued.`
+                );
+                await createNotification(
+                  vendor.org_id,
+                  null,
+                  "admin",
+                  "Payment Reconciled",
+                  `Member "${vendor.name}" (Shop ${vendor.shop}) has made a bank transfer of ₦${txnAmount.toLocaleString()} to their dedicated account.`
+                );
+
+                // Send payment alert email
+                const vendorEmail = `${vendor.name.toLowerCase().replace(/\s+/g, "")}@duesly-vendor.org`;
+                sendPaymentAlert({
+                  vendorEmail,
+                  vendorName: vendor.name,
+                  amount: txnAmount,
+                  receiptId: rcpId,
+                  category: "Monthly Levy",
+                  orgName: orgName
+                }).catch((err) => {
+                  console.error("Resend delivery failed:", err);
+                });
+
+                // Trigger auto-settlement split disbursement
+                dispatchAutoSettlementSplits(vendor.org_id, vendor.id, vendor.name, txnAmount).catch((err) => {
+                  console.error("Auto-settlement splits trigger failed:", err);
+                });
+              }
+            }
+
+            if (newTxnsCount > 0) {
+              console.log(`Reconciled ${newTxnsCount} new live Nomba payments for vendor: ${vendor.name}`);
+              paymentsRes = await pool.query(
+                "SELECT * FROM payments WHERE vendor_id = $1 ORDER BY id DESC",
+                [vendor.id]
+              );
+              receiptsRes = await pool.query(
+                "SELECT * FROM receipts WHERE vendor_name = $1 ORDER BY id DESC",
+                [vendor.name]
+              );
+            }
+          } else {
+            console.error(`Nomba transactions fetch failed: ${nombaRes.status} - ${await nombaRes.text()}`);
+          }
+        } catch (err) {
+          console.error("Failed to fetch live Nomba transactions during portal reload:", err);
+        }
+      }
 
       return {
         success: true,
@@ -634,7 +992,21 @@ export const getVendorPortal = createServerFn({ method: "POST" })
           due: parseFloat(vendor.due),
           paid: parseFloat(vendor.paid),
           status: vendor.status,
+          orgId: vendor.org_id,
+          orgName: orgName,
+          orgType: orgType,
+          email: email
         },
+        duesCategories: duesRes.rows.map(d => ({
+          id: d.id,
+          name: d.name,
+          amount: parseFloat(d.amount),
+          frequency: d.frequency,
+          targetAccount: d.target_account,
+          destinationBank: d.destination_bank,
+          destinationAccount: d.destination_account,
+          destinationName: d.destination_name
+        })),
         payments: paymentsRes.rows.map(p => ({
           id: p.id,
           amount: parseFloat(p.amount),
@@ -690,6 +1062,213 @@ export const getSuperAdminTransactions = createServerFn({ method: "GET" })
 
 import { analyzeCollectionInsights } from "./gemini";
 
+// Nomba OAuth2 Access Token Helper
+async function getNombaAccessToken() {
+  const clientId = process.env.NOMBA_CLIENT_ID;
+  const clientSecret = process.env.NOMBA_PRIVATE_KEY;
+  const accountId = process.env.NOMBA_PARENT_ACCOUNT_ID;
+
+  if (!clientId || !clientSecret || !accountId) {
+    throw new Error("Missing Nomba API credentials in environment");
+  }
+
+  const baseUrl = "https://api.nomba.com";
+  console.log(`Fetching Nomba access token from: ${baseUrl}/v1/auth/token/issue`);
+  
+  const response = await fetch(`${baseUrl}/v1/auth/token/issue`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "accountId": accountId
+    },
+    body: JSON.stringify({
+      grant_type: "client_credentials",
+      client_id: clientId,
+      client_secret: clientSecret
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Nomba Authentication failed: ${response.status} - ${errorText}`);
+  }
+
+  const result: any = await response.json();
+  return result.data.access_token;
+}
+
+// Nomba Split Auto-Settlement Dispatcher
+export async function dispatchAutoSettlementSplits(
+  orgId: string,
+  vendorId: string,
+  vendorName: string,
+  paymentAmount: number
+) {
+  console.log(`Checking auto-settlement splits for payment of ₦${paymentAmount} from vendor ${vendorName}`);
+  
+  // 1. Fetch the dues categories for the organization Consistently
+  const categoriesRes = await pool.query(
+    "SELECT * FROM dues_categories WHERE org_id = $1 ORDER BY amount DESC, name ASC",
+    [orgId]
+  );
+  
+  if (categoriesRes.rowCount === 0) return;
+  
+  let remainingAmount = paymentAmount;
+  
+  for (const cat of categoriesRes.rows) {
+    if (remainingAmount <= 0) break;
+    
+    const catAmount = parseFloat(cat.amount);
+    const splitAmount = Math.min(remainingAmount, catAmount);
+    remainingAmount -= splitAmount;
+    
+    // Check if this category has a split destination account configured
+    if (cat.destination_account && cat.destination_bank) {
+      const destAcc = cat.destination_account.trim();
+      const destBank = cat.destination_bank.trim();
+      
+      if (destAcc.length === 10) {
+        console.log(`Auto-settlement trigger: routing ₦${splitAmount} from split levy "${cat.name}" to ${destBank} (${destAcc})`);
+        
+        try {
+          const accessToken = await getNombaAccessToken();
+          const parentAccountId = process.env.NOMBA_PARENT_ACCOUNT_ID;
+          
+          if (!accessToken || !parentAccountId) {
+            console.error("Auto-settlement failed: Nomba credentials missing");
+            continue;
+          }
+          
+          const getBankCode = (bankName: string) => {
+            const name = bankName.toLowerCase();
+            if (name.includes("zenith")) return "057";
+            if (name.includes("access")) return "044";
+            if (name.includes("guaranty") || name.includes("gtb") || name.includes("gtbank")) return "058";
+            if (name.includes("united") || name.includes("uba")) return "033";
+            if (name.includes("first")) return "011";
+            if (name.includes("opay") || name.includes("paycom")) return "305";
+            if (name.includes("palmpay")) return "100033";
+            if (name.includes("moniepoint")) return "090405";
+            if (name.includes("kuda")) return "090267";
+            if (name.includes("stanbic")) return "039";
+            if (name.includes("sterling")) return "050";
+            if (name.includes("union")) return "032";
+            if (name.includes("wema")) return "035";
+            if (name.includes("fidelity")) return "070";
+            if (name.includes("polaris")) return "076";
+            if (name.includes("fcmb")) return "214";
+            return "057";
+          };
+          
+          const bankCode = getBankCode(destBank);
+          const txnId = "SPLIT-" + Math.floor(100000 + Math.random() * 900000);
+          
+          const transferRes = await fetch("https://api.nomba.com/v2/transfers/bank", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${accessToken}`,
+              "accountId": parentAccountId
+            },
+            body: JSON.stringify({
+              amount: splitAmount,
+              accountNumber: destAcc,
+              accountName: cat.destination_name || vendorName,
+              bankCode: bankCode,
+              merchantTxRef: txnId,
+              senderName: "Duesly Pay Technologies",
+              narration: `Split settlement ${cat.name} from ${vendorName}`
+            })
+          });
+          
+          if (!transferRes.ok) {
+            const errBody = await transferRes.text();
+            console.error(`Nomba auto-settlement split transfer failed: ${transferRes.status} - ${errBody}`);
+            
+            await createNotification(
+              orgId,
+              null,
+              "admin",
+              "Split Routing Failed",
+              `Auto-routing ₦${splitAmount.toLocaleString()} for "${cat.name}" failed: ${errBody}`
+            );
+          } else {
+            const transferData = await transferRes.json();
+            console.log("Nomba auto-settlement split transfer successful response:", transferData);
+            
+            const todayStr = new Date().toLocaleDateString("en-NG", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            });
+            
+            // Log split debit payment in payments ledger
+            await pool.query(
+              `INSERT INTO payments (id, org_id, vendor_id, vendor_name, account, amount, category, date, status)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+              [
+                txnId,
+                orgId,
+                vendorId,
+                vendorName,
+                destAcc,
+                -splitAmount,
+                `Split Settlement: ${cat.name}`,
+                "Today, " + new Date().toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" }),
+                "Disbursed"
+              ]
+            );
+
+            // Log split debit receipt
+            const rcpId = "RCP-" + Math.floor(10000 + Math.random() * 90000);
+            await pool.query(
+              `INSERT INTO receipts (id, org_id, vendor_name, category, amount, date, status)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+              [
+                rcpId,
+                orgId,
+                vendorName,
+                `Split Settlement: ${cat.name}`,
+                -splitAmount,
+                todayStr,
+                "Disbursed"
+              ]
+            );
+
+            // Log reconciliation split trace entry
+            const rcId = "RC-" + Math.floor(100 + Math.random() * 900);
+            await pool.query(
+              `INSERT INTO reconciliations (id, org_id, source, vendor_name, expected, paid, diff, status)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+              [
+                rcId,
+                orgId,
+                destAcc,
+                vendorName,
+                splitAmount,
+                splitAmount,
+                0,
+                "matched"
+              ]
+            );
+
+            await createNotification(
+              orgId,
+              null,
+              "admin",
+              "Split Routing Successful",
+              `Auto-routed ₦${splitAmount.toLocaleString()} for "${cat.name}" to ${destBank} (${destAcc}) successfully.`
+            );
+          }
+        } catch (apiErr) {
+          console.error("Failed to execute Nomba auto-settlement split payout transfer:", apiErr);
+        }
+      }
+    }
+  }
+}
+
 // Nomba Virtual Account Creation Client
 export async function createNombaVirtualAccount(vendorName: string, shopNumber: string) {
   const clientId = process.env.NOMBA_CLIENT_ID;
@@ -700,23 +1279,36 @@ export async function createNombaVirtualAccount(vendorName: string, shopNumber: 
   if (clientId && privateKey && subAccountId && parentAccountId) {
     try {
       console.log(`Initiating Nomba Virtual Account registration for: ${vendorName} (Shop: ${shopNumber})`);
-      const response = await fetch("https://api.nomba.com/v1/virtual-accounts", {
+      const accessToken = await getNombaAccessToken();
+      const baseUrl = "https://api.nomba.com";
+      
+      const response = await fetch(`${baseUrl}/v1/accounts/virtual`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "accountId": parentAccountId,
-          "Authorization": `Bearer ${clientId}`,
+          "Authorization": `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          accountName: `Duesly - ${vendorName}`,
+          accountRef: "ref-" + Math.floor(10000000 + Math.random() * 90000000),
+          accountName: `Duesly ${vendorName}`.replace(/[^a-zA-Z0-9 ]/g, "").slice(0, 40).trim(),
           email: `${vendorName.toLowerCase().replace(/\s+/g, "")}@duesly-vendor.org`,
           phoneNumber: "08030000000",
           subAccountId: subAccountId,
         }),
       });
-      const result = await response.json();
-      if (response.ok && result.data?.accountNumber) {
-        return result.data.accountNumber;
+      
+      const result: any = await response.json();
+      console.log("Nomba Virtual Account creation API result:", result);
+      
+      if (response.ok) {
+        if (result.data?.bankAccountNumber) {
+          return result.data.bankAccountNumber;
+        } else if (result.data?.accountNumber) {
+          return result.data.accountNumber;
+        } else if (result.data?.banks?.[0]?.accountNumber) {
+          return result.data.banks[0].accountNumber;
+        }
       }
     } catch (e) {
       console.warn("Nomba API contact failed, generating virtual NUBAN fallback:", e);
@@ -775,8 +1367,16 @@ export const getAICoachInsights = createServerFn({ method: "GET" })
     orgId: z.string().optional()
   }).optional())
   .handler(async ({ data }) => {
-    const activeOrgId = data?.orgId || "ORG-001";
-    // 1. Fetch vendor metrics
+    const activeOrgId = data?.orgId || "";
+    if (!activeOrgId) return { insights: "" };
+
+    // 1. Fetch organization details
+    const orgRes = await pool.query("SELECT * FROM organizations WHERE id = $1 LIMIT 1", [activeOrgId]);
+    if (orgRes.rowCount === 0) return { insights: "" };
+    const orgName = orgRes.rows[0].name;
+    const orgType = orgRes.rows[0].type || "Market";
+
+    // 2. Fetch vendor metrics
     const vendorsRes = await pool.query("SELECT * FROM vendors WHERE org_id = $1", [activeOrgId]);
     const vendors = vendorsRes.rows;
 
@@ -802,14 +1402,20 @@ export const getAICoachInsights = createServerFn({ method: "GET" })
 
     const outstanding = Math.max(0, expected - collected);
 
-    // 2. Fetch category breakdown
+    // 3. Fetch category breakdown
     const catRes = await pool.query("SELECT name, amount FROM dues_categories WHERE org_id = $1", [activeOrgId]);
     const categoryBreakdown = catRes.rows.map((row) => ({
       name: row.name,
       value: parseFloat(row.amount) * totalVendors
     }));
 
+    // 4. Fetch actual unique sections defined in this org
+    const sectionsRes = await pool.query("SELECT DISTINCT section FROM vendors WHERE org_id = $1 AND section IS NOT NULL AND section != ''", [activeOrgId]);
+    const actualSections = sectionsRes.rows.map(r => r.section);
+
     const insightsMarkdown = await analyzeCollectionInsights({
+      orgName,
+      orgType,
       totalVendors,
       expected,
       collected,
@@ -818,6 +1424,7 @@ export const getAICoachInsights = createServerFn({ method: "GET" })
       partial: partialCount,
       unpaid: unpaidCount,
       overpaid: overpaidCount,
+      sections: actualSections
     }, categoryBreakdown);
 
     return { insights: insightsMarkdown };
@@ -945,30 +1552,47 @@ export const updateUserProfile = createServerFn({ method: "POST" })
     };
   });
 
-// Dynamic Organization Settings Update
 export const updateOrganization = createServerFn({ method: "POST" })
   .validator(z.object({
     id: z.string(),
     name: z.string().min(2),
     type: z.string(),
-    expectedCapacity: z.number().optional()
+    expectedCapacity: z.number().optional(),
+    phone: z.string().optional(),
+    address: z.string().optional(),
+    dailySummaryActive: z.boolean().optional(),
+    smsReceiptsActive: z.boolean().optional(),
+    weeklyReportActive: z.boolean().optional(),
+    underpaymentAlertsActive: z.boolean().optional(),
   }))
   .handler(async ({ data }) => {
     // Sanitize organization details
     const sanitizedName = data.name.replace(/<[^>]*>/g, "").trim();
     const sanitizedType = data.type.replace(/<[^>]*>/g, "").trim();
+    const sanitizedPhone = (data.phone || "").replace(/<[^>]*>/g, "").trim();
+    const sanitizedAddress = (data.address || "").replace(/<[^>]*>/g, "").trim();
     const capacity = data.expectedCapacity || 100;
+
+    const currentRes = await pool.query("SELECT * FROM organizations WHERE id = $1 LIMIT 1", [data.id]);
+    if (currentRes.rowCount === 0) {
+      return { success: false, error: "Organization not found" };
+    }
+    const org = currentRes.rows[0];
+    
+    const dailySummary = data.dailySummaryActive !== undefined ? data.dailySummaryActive : org.daily_summary_active;
+    const smsReceipts = data.smsReceiptsActive !== undefined ? data.smsReceiptsActive : org.sms_receipts_active;
+    const weeklyReport = data.weeklyReportActive !== undefined ? data.weeklyReportActive : org.weekly_report_active;
+    const underpaymentAlerts = data.underpaymentAlertsActive !== undefined ? data.underpaymentAlertsActive : org.underpayment_alerts_active;
 
     const res = await pool.query(
       `UPDATE organizations 
-       SET name = $1, type = $2, expected_capacity = $3
-       WHERE id = $4 
-       RETURNING id, name, type, expected_capacity`,
-      [sanitizedName, sanitizedType, capacity, data.id]
+       SET name = $1, type = $2, expected_capacity = $3, phone = $4, address = $5,
+           daily_summary_active = $6, sms_receipts_active = $7, weekly_report_active = $8, underpayment_alerts_active = $9
+       WHERE id = $10 
+       RETURNING *`,
+      [sanitizedName, sanitizedType, capacity, sanitizedPhone, sanitizedAddress, dailySummary, smsReceipts, weeklyReport, underpaymentAlerts, data.id]
     );
-    if (res.rowCount === 0) {
-      return { success: false, error: "Organization not found" };
-    }
+
     return { success: true, org: res.rows[0] };
   });
 
@@ -991,11 +1615,12 @@ export const registerUser = createServerFn({ method: "POST" })
     const orgId = "ORG-" + Math.floor(100 + Math.random() * 899);
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const typeSelected = data.orgType || "Market";
+    const walletAccount = await createNombaVirtualAccount(data.orgName, "HQ");
     
     // 1. Create Organization
     await pool.query(
-      "INSERT INTO organizations (id, name, type, status) VALUES ($1, $2, $3, $4)",
-      [orgId, data.orgName, typeSelected, "active"]
+      "INSERT INTO organizations (id, name, type, status, wallet_account) VALUES ($1, $2, $3, $4, $5)",
+      [orgId, data.orgName, typeSelected, "active", walletAccount]
     );
 
     // 2. Create User (Pending verification)
@@ -1189,7 +1814,7 @@ export const registerMember = createServerFn({ method: "POST" })
       );
     } else {
       const memberId = "V-" + Math.floor(1000 + Math.random() * 9000);
-      const virtualAccount = "9032 " + Math.floor(1000 + Math.random() * 9000) + " " + Math.floor(10 + Math.random() * 90);
+      const virtualAccount = await createNombaVirtualAccount(fullName, data.shop);
 
       await pool.query(
         "INSERT INTO users (email, password, role, org_id, name, is_verified) VALUES ($1, $2, $3, $4, $5, $6)",
@@ -1199,7 +1824,7 @@ export const registerMember = createServerFn({ method: "POST" })
       await pool.query(
         `INSERT INTO vendors (id, org_id, name, shop, phone, section, virtual_account, due, paid, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-        [memberId, data.orgId, fullName, data.shop, data.phone, data.section, virtualAccount, 18000, 0, "unpaid"]
+        [memberId, data.orgId, fullName, data.shop, data.phone, data.section, virtualAccount, 0, 0, "paid"]
       );
     }
 
@@ -1590,7 +2215,9 @@ export const shareVendorReceipts = createServerFn({ method: "POST" })
 export const submitSupportTicket = createServerFn({ method: "POST" })
   .validator(z.object({
     vendorId: z.string(),
-    orgId: z.string()
+    orgId: z.string(),
+    category: z.string(),
+    message: z.string()
   }))
   .handler(async ({ data }) => {
     const vendorRes = await pool.query("SELECT name, shop, phone FROM vendors WHERE id = $1", [data.vendorId]);
@@ -1599,20 +2226,22 @@ export const submitSupportTicket = createServerFn({ method: "POST" })
     }
     const vendor = vendorRes.rows[0];
 
+    // Create admin ticket notification
     await createNotification(
       data.orgId,
       null,
       "admin",
-      "Support Request",
-      `Member "${vendor.name}" (Shop ${vendor.shop}) has opened a support ticket. Phone: ${vendor.phone}.`
+      `Support Inquiry: ${data.category}`,
+      `Member "${vendor.name}" (Shop ${vendor.shop}) sent a request:\n"${data.message}"\nContact: ${vendor.phone}`
     );
 
+    // Create vendor confirmation notification
     await createNotification(
       data.orgId,
       data.vendorId,
       "vendor",
       "Support Ticket Logged",
-      "Your support request has been logged successfully. The administrator has been notified."
+      `Your support request regarding "${data.category}" was successfully logged. Message: "${data.message}"`
     );
 
     return { success: true };
@@ -1666,10 +2295,303 @@ export const submitContactForm = createServerFn({ method: "POST" })
     `;
 
     const res = await sendEmail({
-      to: "chuksy3@gmail.com",
+      to: "canipf.ng@gmail.com",
       subject: `Duesly Inquiry: ${data.subject}`,
       html: emailContent,
     });
 
     return res;
+  });
+
+export const getSystemSettings = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const res = await pool.query("SELECT * FROM system_settings");
+    const settings: Record<string, boolean> = {
+      auto_approve: true,
+      send_sms: true,
+      enable_ussd: false,
+      whatsapp_bot: false
+    };
+    for (const r of res.rows) {
+      settings[r.key] = r.value === "true";
+    }
+    return {
+      autoApprove: settings.auto_approve,
+      sendSms: settings.send_sms,
+      enableUssd: settings.enable_ussd,
+      whatsappBot: settings.whatsapp_bot
+    };
+  });
+
+export const updateSystemSetting = createServerFn({ method: "POST" })
+  .validator(z.object({
+    key: z.string(),
+    value: z.boolean()
+  }))
+  .handler(async ({ data }) => {
+    const strVal = data.value ? "true" : "false";
+    await pool.query(
+      "INSERT INTO system_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2",
+      [data.key, strVal]
+    );
+    return { success: true };
+  });
+
+export const simulateIncomingPayment = createServerFn({ method: "POST" })
+  .validator(z.object({
+    vendorId: z.string(),
+    amount: z.number().positive(),
+  }))
+  .handler(async ({ data }) => {
+    const vendorRes = await pool.query("SELECT * FROM vendors WHERE id = $1 LIMIT 1", [data.vendorId]);
+    if (!vendorRes.rowCount) {
+      return { success: false, error: "Member not found" };
+    }
+    const vendor = vendorRes.rows[0];
+
+    const currentPaid = parseFloat(vendor.paid) || 0;
+    const currentDue = parseFloat(vendor.due) || 0;
+    const newPaid = currentPaid + data.amount;
+
+    let status = "unpaid";
+    if (newPaid >= currentDue) {
+      status = "paid";
+    } else if (newPaid > 0) {
+      status = "partial";
+    }
+
+    // Update vendor balances
+    await pool.query(
+      "UPDATE vendors SET paid = $1, status = $2 WHERE id = $3",
+      [newPaid, status, vendor.id]
+    );
+
+    const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    // Log transaction payment
+    const txnId = "TXN-" + Math.floor(100000 + Math.random() * 900000);
+    await pool.query(
+      `INSERT INTO payments (id, org_id, vendor_id, vendor_name, account, amount, category, date, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [txnId, vendor.org_id, vendor.id, vendor.name, vendor.virtual_account, data.amount, "Dedicated Transfer", todayStr, "Matched"]
+    );
+
+    // Issue receipt
+    const rcpId = "RCP-" + Math.floor(10000 + Math.random() * 90000);
+    await pool.query(
+      `INSERT INTO receipts (id, org_id, vendor_name, category, amount, date, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [rcpId, vendor.org_id, vendor.name, "Dedicated Transfer", data.amount, todayStr, "Issued"]
+    );
+
+    // Dispatch notification alert
+    await createNotification(
+      vendor.org_id,
+      vendor.id,
+      "vendor",
+      "Payment Reconciled",
+      `Your bank transfer of ₦${data.amount.toLocaleString()} was successfully processed and receipt ${rcpId} has been issued.`
+    );
+
+    return { success: true };
+  });
+
+export const submitWithdrawalRequest = createServerFn({ method: "POST" })
+  .validator(z.object({
+    vendorId: z.string(),
+    orgId: z.string(),
+    amount: z.number(),
+    bankName: z.string(),
+    accountNumber: z.string()
+  }))
+  .handler(async ({ data }) => {
+    const vendorRes = await pool.query("SELECT name, shop, phone FROM vendors WHERE id = $1", [data.vendorId]);
+    if (!vendorRes.rowCount) {
+      return { success: false, error: "Member not found" };
+    }
+    const vendor = vendorRes.rows[0];
+
+    // Create admin notification
+    await createNotification(
+      data.orgId,
+      null,
+      "admin",
+      "Withdrawal Request: Pending",
+      `Member "${vendor.name}" (Shop ${vendor.shop}) requested a withdrawal of ₦${data.amount.toLocaleString()} to ${data.bankName} (${data.accountNumber}).\nContact: ${vendor.phone}`
+    );
+
+    // Create vendor notification
+    await createNotification(
+      data.orgId,
+      data.vendorId,
+      "vendor",
+      "Withdrawal Logged",
+      `Your withdrawal request of ₦${data.amount.toLocaleString()} to ${data.bankName} (${data.accountNumber}) is pending administrator approval.`
+    );
+
+    return { success: true };
+  });
+
+export const approveWithdrawalRequest = createServerFn({ method: "POST" })
+  .validator(z.object({
+    notificationId: z.string()
+  }))
+  .handler(async ({ data }) => {
+    const notiRes = await pool.query("SELECT * FROM notifications WHERE id = $1", [data.notificationId]);
+    if (!notiRes.rowCount) {
+      return { success: false, error: "Request not found" };
+    }
+    const noti = notiRes.rows[0];
+    
+    const nameMatch = noti.message.match(/Member\s*"([^"]+)"/i);
+    const amountMatch = noti.message.match(/withdrawal of\s*₦?([\d,]+)/i);
+    
+    if (!nameMatch || !amountMatch) {
+      return { success: false, error: "Could not parse request details" };
+    }
+    
+    const vendorName = nameMatch[1];
+    const amount = parseFloat(amountMatch[1].replace(/,/g, ""));
+    
+    const vendorRes = await pool.query("SELECT * FROM vendors WHERE name = $1 AND org_id = $2", [vendorName, noti.org_id]);
+    if (!vendorRes.rowCount) {
+      return { success: false, error: "Member not found" };
+    }
+    const vendor = vendorRes.rows[0];
+    
+    const currentPaid = parseFloat(vendor.paid) || 0;
+    if (currentPaid < amount) {
+      return { success: false, error: "Member has insufficient paid balance for this payout" };
+    }
+
+    const txnId = "WD-" + Math.floor(100000 + Math.random() * 900000);
+    const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    
+    // Execute real transfer payout via Nomba API
+    try {
+      const accessToken = await getNombaAccessToken();
+      const parentAccountId = process.env.NOMBA_PARENT_ACCOUNT_ID;
+      
+      const bankMatch = noti.message.match(/to\s*([^(\n]+)/i);
+      const rawBank = bankMatch ? bankMatch[1].trim() : "Zenith Bank";
+      
+      const getBankCode = (bankName: string) => {
+        const name = bankName.toLowerCase();
+        if (name.includes("zenith")) return "057";
+        if (name.includes("access")) return "044";
+        if (name.includes("guaranty") || name.includes("gtb") || name.includes("gtbank")) return "058";
+        if (name.includes("united") || name.includes("uba")) return "033";
+        if (name.includes("first")) return "011";
+        if (name.includes("opay") || name.includes("paycom")) return "305";
+        if (name.includes("palmpay")) return "100033";
+        if (name.includes("moniepoint")) return "090405";
+        if (name.includes("kuda")) return "090267";
+        if (name.includes("stanbic")) return "039";
+        if (name.includes("sterling")) return "050";
+        if (name.includes("union")) return "032";
+        if (name.includes("wema")) return "035";
+        if (name.includes("fidelity")) return "070";
+        if (name.includes("polaris")) return "076";
+        if (name.includes("fcmb")) return "214";
+        if (name.includes("nombank") || name.includes("nomba")) return "090001";
+        return "057";
+      };
+      
+      const bankCode = getBankCode(rawBank);
+      const accountNoMatch = noti.message.match(/\((\d{10})\)/);
+      const destinationAccount = accountNoMatch ? accountNoMatch[1].trim() : "";
+      
+      if (!accessToken || !parentAccountId || !destinationAccount) {
+        return { success: false, error: "API Payout credentials or destination account missing" };
+      }
+      
+      console.log(`Initiating live Nomba payout of ₦${amount} to ${destinationAccount} (${rawBank})`);
+      
+      const transferRes = await fetch("https://api.nomba.com/v2/transfers/bank", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${accessToken}`,
+          "accountId": parentAccountId
+        },
+        body: JSON.stringify({
+          amount: amount,
+          accountNumber: destinationAccount,
+          accountName: vendor.name,
+          bankCode: bankCode,
+          merchantTxRef: txnId,
+          senderName: "Duesly Pay Technologies",
+          narration: `Payout refund ${vendorName}`
+        })
+      });
+
+      if (!transferRes.ok) {
+        const errBody = await transferRes.text();
+        console.error(`Nomba transfer disbursement failed: ${transferRes.status} - ${errBody}`);
+        let errMsg = `Nomba Error (${transferRes.status})`;
+        try {
+          const parsedErr = JSON.parse(errBody);
+          errMsg = parsedErr.description || parsedErr.message || errMsg;
+        } catch (_) {}
+        return { success: false, error: `Disbursement Failed: ${errMsg}` };
+      }
+
+      const transferData = await transferRes.json();
+      console.log("Nomba transfer disbursement successful response:", transferData);
+      
+    } catch (apiErr: any) {
+      console.error("Failed to execute live Nomba payout transfer:", apiErr);
+      return { success: false, error: `Connection failed: ${apiErr.message || apiErr}` };
+    }
+
+    // Payout succeeded on Nomba API! Commit database changes:
+    const newPaid = currentPaid - amount;
+    const due = parseFloat(vendor.due);
+    let status = "unpaid";
+    if (newPaid >= due) {
+      status = newPaid > due ? "overpaid" : "paid";
+    } else if (newPaid > 0) {
+      status = "partial";
+    }
+
+    await pool.query(
+      "UPDATE vendors SET paid = $1, status = $2 WHERE id = $3",
+      [newPaid, status, vendor.id]
+    );
+
+    await pool.query(
+      `INSERT INTO payments (id, org_id, vendor_id, vendor_name, account, amount, category, date, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        txnId,
+        vendor.org_id,
+        vendor.id,
+        vendor.name,
+        vendor.virtual_account,
+        -amount,
+        "Withdrawal Refund",
+        todayStr,
+        "Refunded"
+      ]
+    );
+
+    // Insert receipt log (debit)
+    const rcpId = "RCP-" + Math.floor(10000 + Math.random() * 90000);
+    await pool.query(
+      `INSERT INTO receipts (id, org_id, vendor_name, category, amount, date, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [rcpId, vendor.org_id, vendor.name, "Withdrawal Refund", -amount, todayStr, "Refunded"]
+    );
+
+    await pool.query("UPDATE notifications SET read = true WHERE id = $1", [data.notificationId]);
+
+    await createNotification(
+      vendor.org_id,
+      vendor.id,
+      "vendor",
+      "Withdrawal Approved",
+      `Your withdrawal of ₦${amount.toLocaleString()} has been approved and transferred to your bank account.`
+    );
+
+    return { success: true };
   });

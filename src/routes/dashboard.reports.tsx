@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatNaira, monthlyTrend } from "@/lib/sample-data";
 import { StatusBadge } from "@/components/duesly/status-badge";
-import { Download, FileDown, BarChart3, Printer } from "lucide-react";
+import { Download, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import { getDashboardData, getVendors } from "@/lib/db-actions";
 import { useState, useEffect } from "react";
@@ -29,28 +29,39 @@ function Page() {
 
   const [activeOrgId, setActiveOrgId] = useState("ORG-001");
   const [statsData, setStatsData] = useState(stats);
-  const [categoryBreakdownData, setCategoryBreakdownData] = useState(categoryBreakdown);
+  const [categoryBreakdownData, setCategoryBreakdownData] = useState(categoryBreakdown || []);
   const [trendData, setTrendData] = useState(trend || []);
   const [vendorsList, setVendorsList] = useState(vendors);
+  const [hydrating, setHydrating] = useState(true);
+  const today = new Date();
+  const currentMonthStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
+  const currentMonthEnd = today.toISOString().slice(0, 10);
+  const [startDate, setStartDate] = useState(currentMonthStart);
+  const [endDate, setEndDate] = useState(currentMonthEnd);
 
   useEffect(() => {
     const localUser = localStorage.getItem("user");
     if (localUser) {
       const parsed = JSON.parse(localUser);
-      if (parsed.org_id && parsed.org_id !== "ORG-001") {
+      if (parsed.org_id) {
         setActiveOrgId(parsed.org_id);
-        getDashboardData({ data: { orgId: parsed.org_id } })
-          .then((data) => {
+        Promise.all([
+          getDashboardData({ data: { orgId: parsed.org_id } }),
+          getVendors({ data: { orgId: parsed.org_id } })
+        ])
+          .then(([data, orgVendors]) => {
             setStatsData(data.stats);
-            setCategoryBreakdownData(data.categoryBreakdown);
+            setCategoryBreakdownData(data.categoryBreakdown || []);
             setTrendData(data.trend || []);
+            setVendorsList(orgVendors);
           })
-          .catch(console.error);
-
-        getVendors({ data: { orgId: parsed.org_id } })
-          .then(setVendorsList)
-          .catch(console.error);
+          .catch(console.error)
+          .finally(() => setHydrating(false));
+      } else {
+        setHydrating(false);
       }
+    } else {
+      setHydrating(false);
     }
   }, [dashboardData, vendors]);
   
@@ -65,6 +76,9 @@ function Page() {
   const filteredVendors = selectedSection === "all"
     ? vendorsList
     : vendorsList.filter((v: any) => v.section === selectedSection);
+
+  const sections = Array.from(new Set(vendorsList.map((v: any) => v.section).filter(Boolean))).sort();
+  const reportScope = `${selectedSection === "all" ? "All sections" : selectedSection} · ${startDate} to ${endDate}`;
 
   const handleExportPDFSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,6 +96,16 @@ function Page() {
       setExportDialogOpen(false);
     }, 100);
   };
+
+  if (hydrating) {
+    return (
+      <OrgShell title="Reports" subtitle="Collection insights, compliance and exports.">
+        <div className="flex min-h-[360px] items-center justify-center rounded-2xl border bg-card shadow-soft">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald border-t-transparent" />
+        </div>
+      </OrgShell>
+    );
+  }
 
   if (vendorsList.length === 0) {
     return (
@@ -108,12 +132,17 @@ function Page() {
     <OrgShell title="Reports" subtitle="Collection insights, compliance and exports."
       actions={
         <>
-          <Input type="date" defaultValue="2026-06-01" className="w-40 bg-transparent border-border focus:ring-emerald hidden sm:block" />
-          <Input type="date" defaultValue="2026-06-30" className="w-40 bg-transparent border-border focus:ring-emerald hidden sm:block" />
+          <Input aria-label="Report start date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-40 bg-transparent border-border focus:ring-emerald hidden sm:block" />
+          <Input aria-label="Report end date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-40 bg-transparent border-border focus:ring-emerald hidden sm:block" />
           <Button variant="hero" className="cursor-pointer" onClick={() => setExportDialogOpen(true)} disabled={vendorsList.length === 0}><Download className="h-4 w-4" /> Export PDF</Button>
         </>
       }
     >
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span className="rounded-full bg-emerald/10 px-3 py-1 font-semibold text-emerald">Live dashboard data</span>
+        <span className="rounded-full bg-secondary px-3 py-1">{reportScope}</span>
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 rounded-2xl border bg-card p-5 shadow-soft">
           <h3 className="font-display text-lg font-bold text-navy">Monthly collection summary (₦M)</h3>
@@ -221,12 +250,9 @@ function Page() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all" className="cursor-pointer">All Sections</SelectItem>
-                    <SelectItem value="Textile Line" className="cursor-pointer">Textile Line</SelectItem>
-                    <SelectItem value="Provisions" className="cursor-pointer">Provisions</SelectItem>
-                    <SelectItem value="Electronics" className="cursor-pointer">Electronics</SelectItem>
-                    <SelectItem value="Cosmetics" className="cursor-pointer">Cosmetics</SelectItem>
-                    <SelectItem value="Grains" className="cursor-pointer">Grains</SelectItem>
-                    <SelectItem value="Hardware" className="cursor-pointer">Hardware</SelectItem>
+                    {sections.map((section) => (
+                      <SelectItem key={section} value={section} className="cursor-pointer">{section}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -275,7 +301,7 @@ function Page() {
             <p className="text-xs text-slate-500">Vendor collection compliance & levy audits</p>
           </div>
           <div className="text-right text-xs text-slate-500 leading-relaxed">
-            <p><strong>Report Scope:</strong> {selectedSection === "all" ? "All Sections" : `Section: ${selectedSection}`}</p>
+            <p><strong>Report Scope:</strong> {reportScope}</p>
             <p><strong>Run Date:</strong> {new Date().toLocaleDateString("en-NG")}</p>
             <p><strong>Status:</strong> Active</p>
           </div>
@@ -300,8 +326,8 @@ function Page() {
                 <td className="py-2.5">{v.shop}</td>
                 <td className="py-2.5">{v.section}</td>
                 <td className="py-2.5 font-mono text-[10px]">{v.virtualAccount || "N/A"}</td>
-                <td className="py-2.5 text-right font-mono">₦{Number(v.due).toLocaleString("en-NG")}</td>
-                <td className="py-2.5 text-right font-mono font-semibold">₦{Number(v.paid).toLocaleString("en-NG")}</td>
+                <td className="py-2.5 text-right font-mono">{formatNaira(v.due)}</td>
+                <td className="py-2.5 text-right font-mono font-semibold">{formatNaira(v.paid)}</td>
                 <td className="py-2.5 font-bold uppercase text-[9px]">{v.status}</td>
               </tr>
             ))}

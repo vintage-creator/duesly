@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { pool } from "@/lib/db";
 import crypto from "crypto";
 import { sendPaymentAlert } from "@/lib/email";
+import { dispatchAutoSettlementSplits } from "@/lib/db-actions";
 
 export const Route = createFileRoute("/api/webhook")({
   server: {
@@ -49,7 +50,7 @@ export const Route = createFileRoute("/api/webhook")({
             [normalizedAccount]
           );
 
-          const txnId = "TXN-" + Math.floor(100000 + Math.random() * 900000);
+          const txnId = data.transactionId || data.ref || data.id || ("TXN-" + Math.floor(100000 + Math.random() * 900000));
           const rcpId = "RCP-" + Math.floor(10000 + Math.random() * 90000);
           const rcId = "RC-" + Math.floor(100 + Math.random() * 900);
           const today = new Date().toLocaleDateString("en-NG", {
@@ -113,14 +114,34 @@ export const Route = createFileRoute("/api/webhook")({
 
             // Dispatch receipt email to vendor via Resend API
             const vendorEmail = `${vendor.name.toLowerCase().replace(/\s+/g, "")}@duesly-vendor.org`;
-            sendPaymentAlert({
-              vendorEmail: vendorEmail,
-              vendorName: vendor.name,
-              amount: amount,
-              receiptId: rcpId,
-              category: "Monthly Levy",
-            }).catch((err) => {
-              console.error("Resend delivery failed:", err);
+            pool.query("SELECT name FROM organizations WHERE id = $1 LIMIT 1", [vendor.org_id])
+              .then((orgRes) => {
+                const orgName = orgRes.rows[0]?.name || "your association";
+                sendPaymentAlert({
+                  vendorEmail: vendorEmail,
+                  vendorName: vendor.name,
+                  amount: amount,
+                  receiptId: rcpId,
+                  category: "Monthly Levy",
+                  orgName: orgName,
+                }).catch((err) => {
+                  console.error("Resend delivery failed:", err);
+                });
+              })
+              .catch((err) => {
+                console.error("Failed to fetch orgName for email alert:", err);
+                sendPaymentAlert({
+                  vendorEmail: vendorEmail,
+                  vendorName: vendor.name,
+                  amount: amount,
+                  receiptId: rcpId,
+                  category: "Monthly Levy",
+                }).catch((e) => console.error(e));
+              });
+
+            // Trigger auto-settlement split disbursement
+            dispatchAutoSettlementSplits(vendor.org_id, vendor.id, vendor.name, amount).catch((err) => {
+              console.error("Auto-settlement splits trigger failed:", err);
             });
 
             console.log(`Successfully processed verified webhook payment and dispatched email for vendor ${vendor.name}`);

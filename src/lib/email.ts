@@ -67,12 +67,14 @@ export async function sendPaymentAlert({
   amount,
   receiptId,
   category,
+  orgName,
 }: {
   vendorEmail: string;
   vendorName: string;
   amount: number;
   receiptId: string;
   category: string;
+  orgName?: string;
 }) {
   const formattedAmount = new Intl.NumberFormat("en-NG", {
     style: "currency",
@@ -80,12 +82,13 @@ export async function sendPaymentAlert({
     maximumFractionDigits: 0,
   }).format(amount);
 
+  const finalOrgName = orgName || "your association";
   const subject = `Payment Confirmed: ${category} — Duesly`;
   const html = `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #f0f0f0; border-radius: 12px; background-color: #ffffff;">
       <h2 style="color: #0b1a3a;">Duesly Payment Confirmation</h2>
       <p>Hello <strong>${vendorName}</strong>,</p>
-      <p>Your payment to the <strong>Ariaria Market Association</strong> has been successfully received and reconciled.</p>
+      <p>Your payment to <strong>${finalOrgName}</strong> has been successfully received and reconciled.</p>
       
       <div style="background-color: #f7fafc; padding: 15px; border-radius: 8px; margin: 20px 0;">
         <table style="width: 100%; border-collapse: collapse;">
@@ -108,7 +111,7 @@ export async function sendPaymentAlert({
         </table>
       </div>
       
-      <p style="font-size: 14px; color: #718096;">Thank you for your timely compliance. You can log into your Duesly Vendor Portal at any time to view your historical receipts and outstanding balances.</p>
+      <p style="font-size: 14px; color: #718096;">Thank you for your timely compliance. You can log into your Duesly Portal at any time to view your historical receipts and outstanding balances.</p>
       <p style="font-size: 12px; color: #a0aec0; border-top: 1px dashed #e2e8f0; padding-top: 15px; margin-top: 20px; text-align: center;">Powered by Duesly Technologies</p>
     </div>
   `;
@@ -121,11 +124,13 @@ export async function sendOutstandingReminder({
   vendorName,
   amount,
   category,
+  orgName,
 }: {
   vendorEmail: string;
   vendorName: string;
   amount: number;
   category: string;
+  orgName?: string;
 }) {
   const formattedAmount = new Intl.NumberFormat("en-NG", {
     style: "currency",
@@ -133,12 +138,13 @@ export async function sendOutstandingReminder({
     maximumFractionDigits: 0,
   }).format(amount);
 
+  const finalOrgName = orgName || "your association";
   const subject = `Urgent Reminder: Outstanding ${category} — Duesly`;
   const html = `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #f0f0f0; border-radius: 12px; background-color: #ffffff;">
       <h2 style="color: #0b1a3a;">Outstanding Balance Alert</h2>
       <p>Hello <strong>${vendorName}</strong>,</p>
-      <p>This is a notification from the <strong>Ariaria Market Association</strong> regarding your outstanding dues.</p>
+      <p>This is a notification from <strong>${finalOrgName}</strong> regarding your outstanding dues.</p>
       
       <div style="background-color: #fffaf0; padding: 15px; border-radius: 8px; border: 1px solid #feebc8; margin: 20px 0;">
         <table style="width: 100%; border-collapse: collapse;">

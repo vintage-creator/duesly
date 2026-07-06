@@ -4,12 +4,12 @@ import { StatCard } from "@/components/duesly/stat-card";
 import { StatusBadge } from "@/components/duesly/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Wallet, TrendingUp, AlertCircle, Users, Download, Plus, Sparkles, BrainCircuit, Send, PieChart as PieChartIcon, Printer } from "lucide-react";
+import { ClipboardList, TrendingUp, AlertCircle, Users, Download, Plus, Sparkles, BrainCircuit, Send, PieChart as PieChartIcon, Printer } from "lucide-react";
 import { formatNaira, formatNumber, monthlyTrend } from "@/lib/sample-data";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { toast } from "sonner";
 import { getDashboardData, generateBills, getAICoachInsights, askAICoach, getExportTransactions } from "@/lib/db-actions";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -27,6 +27,108 @@ export const Route = createFileRoute("/dashboard/")({
   component: Page,
 });
 
+function parseMarkdown(text: string) {
+  if (!text) return [];
+  const lines = text.split("\n");
+  const parsed: React.ReactNode[] = [];
+  let inList = false;
+  let listItems: React.ReactNode[] = [];
+
+  const flushList = (key: number) => {
+    if (inList && listItems.length > 0) {
+      parsed.push(
+        <ul key={`ul-${key}`} className="list-disc pl-5 space-y-1 my-2 text-xs text-muted-foreground">
+          {listItems}
+        </ul>
+      );
+      listItems = [];
+      inList = false;
+    }
+  };
+
+  const parseInlineStyles = (str: string) => {
+    const parts = [];
+    let currentIdx = 0;
+    const boldRegex = /\*\*(.*?)\*\*/g;
+    let match;
+    let keyIdx = 0;
+    while ((match = boldRegex.exec(str)) !== null) {
+      const matchIndex = match.index;
+      if (matchIndex > currentIdx) {
+        parts.push(str.substring(currentIdx, matchIndex));
+      }
+      parts.push(
+        <strong key={`bold-${keyIdx++}`} className="font-semibold text-navy">
+          {match[1]}
+        </strong>
+      );
+      currentIdx = boldRegex.lastIndex;
+    }
+    if (currentIdx < str.length) {
+      parts.push(str.substring(currentIdx));
+    }
+    return parts.length > 0 ? parts : str;
+  };
+
+  lines.forEach((line, idx) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushList(idx);
+      return;
+    }
+
+    if (trimmed.startsWith("###")) {
+      flushList(idx);
+      const content = trimmed.substring(3).trim();
+      parsed.push(
+        <h4 key={`h4-${idx}`} className="text-sm font-bold text-navy mt-4 mb-1.5 first:mt-0">
+          {parseInlineStyles(content)}
+        </h4>
+      );
+    } else if (trimmed.startsWith("##")) {
+      flushList(idx);
+      const content = trimmed.substring(2).trim();
+      parsed.push(
+        <h3 key={`h3-${idx}`} className="text-base font-bold text-navy mt-5 mb-2 first:mt-0">
+          {parseInlineStyles(content)}
+        </h3>
+      );
+    } else if (trimmed.startsWith("#")) {
+      flushList(idx);
+      const content = trimmed.substring(1).trim();
+      parsed.push(
+        <h2 key={`h2-${idx}`} className="text-lg font-bold text-navy mt-6 mb-3 first:mt-0">
+          {parseInlineStyles(content)}
+        </h2>
+      );
+    } else if (trimmed.startsWith("*") || trimmed.startsWith("-")) {
+      inList = true;
+      const content = trimmed.substring(1).trim();
+      listItems.push(
+        <li key={`li-${idx}`} className="leading-relaxed">
+          {parseInlineStyles(content)}
+        </li>
+      );
+    } else {
+      flushList(idx);
+      parsed.push(
+        <p key={`p-${idx}`} className="my-2 text-xs leading-relaxed text-slate-600">
+          {parseInlineStyles(trimmed)}
+        </p>
+      );
+    }
+  });
+
+  flushList(lines.length);
+  return parsed;
+}
+
+const formatSignedNaira = (amount: number) => {
+  const numericAmount = Number(amount) || 0;
+  const sign = numericAmount < 0 ? "-" : "";
+  return `${sign}${formatNaira(Math.abs(numericAmount))}`;
+};
+
 function Page() {
   const { orgName, stats, recentPayments, categoryBreakdown, trend } = Route.useLoaderData();
   const router = useRouter();
@@ -38,7 +140,8 @@ function Page() {
   const [recentPaymentsData, setRecentPaymentsData] = useState(recentPayments);
   const [categoryBreakdownData, setCategoryBreakdownData] = useState(categoryBreakdown);
   const [trendData, setTrendData] = useState(trend || []);
-  const isTrendEmpty = (trendData || []).every(t => t.collected === 0);
+  const [loading, setLoading] = useState(true);
+  const isTrendEmpty = statsData.collected === 0 && (trendData || []).every(t => t.collected === 0);
   const isCategoryEmpty = (categoryBreakdownData || []).every(c => c.value === 0);
 
   // AI Insights states
@@ -55,19 +158,27 @@ function Page() {
     const localUser = localStorage.getItem("user");
     if (localUser) {
       const parsed = JSON.parse(localUser);
-      if (parsed.org_id && parsed.org_id !== "ORG-001") {
-        setActiveOrgId(parsed.org_id);
-        
-        getDashboardData({ data: { orgId: parsed.org_id } })
+      const userOrgId = parsed.org_id;
+      if (userOrgId) {
+        setActiveOrgId(userOrgId);
+        getDashboardData({ data: { orgId: userOrgId } })
           .then((res) => {
             setActiveOrgName(res.orgName);
             setStatsData(res.stats);
             setRecentPaymentsData(res.recentPayments);
             setCategoryBreakdownData(res.categoryBreakdown);
             setTrendData(res.trend || []);
+            setLoading(false);
           })
-          .catch(console.error);
+          .catch((err) => {
+            console.error(err);
+            setLoading(false);
+          });
+      } else {
+        setLoading(false);
       }
+    } else {
+      setLoading(false);
     }
   }, [orgName]);
 
@@ -151,6 +262,17 @@ function Page() {
     }, 100);
   };
 
+  if (loading) {
+    return (
+      <OrgShell title={activeOrgName} subtitle="Real-time collection overview">
+        <div className="min-h-[450px] flex flex-col items-center justify-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald border-t-transparent" />
+          <p className="text-xs text-muted-foreground font-medium animate-pulse">Initializing workspace...</p>
+        </div>
+      </OrgShell>
+    );
+  }
+
   return (
     <OrgShell
       title={activeOrgName}
@@ -165,8 +287,19 @@ function Page() {
       {/* Dynamic Statistics Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Total Vendors" value={formatNumber(statsData.totalVendors)} delta="Registered members" trend="up" accent="navy" icon={<Users className="h-5 w-5" />} />
-        <StatCard label="Expected (Jun)" value={formatNaira(statsData.expected)} delta="Total outstanding plus collected" accent="info" icon={<Wallet className="h-5 w-5" />} />
-        <StatCard label="Collected" value={formatNaira(statsData.collected)} delta={`${statsData.expected > 0 ? Math.round((statsData.collected / statsData.expected) * 100) : 0}% of expected`} trend="up" accent="emerald" icon={<TrendingUp className="h-5 w-5" />} />
+        <StatCard label="Expected (Jun)" value={formatNaira(statsData.expected)} delta="Total outstanding plus collected" accent="info" icon={<ClipboardList className="h-5 w-5" />} />
+        <StatCard 
+          label="Collected" 
+          value={formatNaira(statsData.collected)} 
+          delta={
+            statsData.totalRefunded > 0 
+              ? `${statsData.expected > 0 ? Math.round((statsData.collected / statsData.expected) * 100) : 0}% of expected (${formatNaira(statsData.totalRefunded || 0)} refunded)`
+              : `${statsData.expected > 0 ? Math.round((statsData.collected / statsData.expected) * 100) : 0}% of expected`
+          } 
+          trend="up" 
+          accent="emerald" 
+          icon={<TrendingUp className="h-5 w-5" />} 
+        />
         <StatCard label="Outstanding" value={formatNaira(statsData.outstanding)} delta="Vendor remaining balances" trend="down" accent="gold" icon={<AlertCircle className="h-5 w-5" />} />
       </div>
 
@@ -192,15 +325,9 @@ function Page() {
               <div className="h-4 w-2/3 rounded-md bg-secondary animate-shimmer" />
             </div>
           ) : (
-            <div 
-              className="prose prose-sm max-w-none text-muted-foreground [&>h3]:text-navy [&>h3]:font-bold [&>h3]:mb-1 [&>ul]:list-disc [&>ul]:pl-4 [&>ul]:space-y-1.5"
-              dangerouslySetInnerHTML={{ 
-                __html: insights
-                  .replace(/### (.*)/g, "<h3 class='text-sm font-bold text-navy mt-1'>$1</h3>")
-                  .replace(/\* \*\*(.*?)\*\*(.*)/g, "<li class='text-xs mt-1'><strong>$1</strong>$2</li>")
-                  .replace(/- \*\frac{(.*?)\*\*(.*)/g, "<li class='text-xs mt-1'><strong>$1</strong>$2</li>")
-              }} 
-            />
+            <div className="space-y-1">
+              {parseMarkdown(insights)}
+            </div>
           )}
         </div>
 
@@ -231,7 +358,9 @@ function Page() {
               ) : (
                 <div>
                   <p className="font-semibold text-navy mb-1.5">AI Response:</p>
-                  <p className="whitespace-pre-line">{reply}</p>
+                  <div className="space-y-1">
+                    {parseMarkdown(reply)}
+                  </div>
                 </div>
               )}
             </div>
@@ -360,16 +489,32 @@ function Page() {
               </tr>
             </thead>
             <tbody>
-              {recentPaymentsData.map((p) => (
-                <tr key={p.id} className="border-t border-border hover:bg-secondary/40">
+              {recentPaymentsData.map((p) => {
+                const isDebit = Number(p.amount) < 0;
+
+                return (
+                  <tr
+                    key={p.id}
+                    className={`border-t border-border hover:bg-secondary/40 ${isDebit ? "bg-rose-50/50" : "bg-emerald-50/40"}`}
+                  >
                   <td className="px-5 py-3 font-medium text-foreground">{p.vendor}</td>
                   <td className="px-5 py-3 font-mono text-xs text-muted-foreground">{p.account}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{p.category}</td>
-                  <td className="px-5 py-3 text-right font-semibold">{formatNaira(p.amount)}</td>
+                  <td className="px-5 py-3 text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span>{p.category}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${isDebit ? "bg-rose-100 text-rose-700" : "bg-emerald/10 text-emerald-700"}`}>
+                        {isDebit ? "Debit" : "Credit"}
+                      </span>
+                    </div>
+                  </td>
+                  <td className={`px-5 py-3 text-right font-semibold ${isDebit ? "text-rose-700" : "text-emerald-700"}`}>
+                    {isDebit ? formatSignedNaira(p.amount) : `+${formatNaira(Number(p.amount) || 0)}`}
+                  </td>
                   <td className="px-5 py-3 text-muted-foreground">{p.date}</td>
                   <td className="px-5 py-3"><StatusBadge status={p.status === "Matched" || p.status === "paid" ? "paid" : p.status === "Overpaid" || p.status === "overpaid" ? "overpaid" : "partial"} /></td>
                 </tr>
-              ))}
+                );
+              })}
               {recentPaymentsData.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-5 py-12 text-center text-muted-foreground">
@@ -477,7 +622,7 @@ function Page() {
                 <td className="py-2.5 font-semibold">{t.vendor}</td>
                 <td className="py-2.5">{t.section}</td>
                 <td className="py-2.5">{t.category}</td>
-                <td className="py-2.5 text-right font-mono font-semibold">₦{Number(t.amount).toLocaleString("en-NG")}</td>
+                <td className="py-2.5 text-right font-mono font-semibold">{formatSignedNaira(t.amount)}</td>
                 <td className="py-2.5 text-slate-500">{t.date}</td>
                 <td className="py-2.5 font-bold uppercase text-[9px]">{t.status}</td>
               </tr>

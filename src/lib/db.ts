@@ -21,7 +21,7 @@ async function getPool() {
   const databaseUrl = process.env.DATABASE_URL || "postgresql://localhost:5432/duesly";
   activePool = new Pool({
     connectionString: databaseUrl,
-    ssl: databaseUrl.includes("vercel-storage.com") || databaseUrl.includes("supabase.co") || databaseUrl.includes("neon.tech")
+    ssl: !databaseUrl.includes("localhost") && !databaseUrl.includes("127.0.0.1")
       ? { rejectUnauthorized: false }
       : false,
   });

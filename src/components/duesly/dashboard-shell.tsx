@@ -1,14 +1,14 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useState, useEffect, type ReactNode } from "react";
 import {
-  LayoutDashboard, Building2, Users, Receipt, FileBarChart2, Settings, CreditCard,
-  Wallet, Bell, Menu, X, LogOut, ChevronLeft, ChevronRight
+  LayoutDashboard, Building2, Users, FileText, FileBarChart2, Settings, ArrowLeftRight,
+  ClipboardList, Bell, Menu, X, LogOut, ChevronLeft, ChevronRight, Phone, MessageSquare
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DueslyLogo } from "./logo";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { getNotifications, markNotificationRead, clearAllNotifications } from "@/lib/db-actions";
+import { getNotifications, markNotificationRead, clearAllNotifications, approveWithdrawalRequest } from "@/lib/db-actions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { getVocabulary } from "@/lib/vocabulary";
 
@@ -20,7 +20,7 @@ export interface NavItem {
 
 interface DashboardShellProps {
   nav: NavItem[];
-  title: string;
+  title?: string;
   subtitle?: string;
   role: string;
   user: { name: string; initials: string; org_type?: string };
@@ -58,6 +58,7 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
   const [unreadCount, setUnreadCount] = useState(0);
   const [selectedAlert, setSelectedAlert] = useState<any | null>(null);
   const [signOutDialogOpen, setSignOutDialogOpen] = useState(false);
+  const [approvingWithdrawal, setApprovingWithdrawal] = useState(false);
 
   const fetchNotis = () => {
     const localUser = localStorage.getItem("user");
@@ -78,8 +79,69 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
     }
   };
 
+  const playChime = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const playTone = (freq: number, startTime: number, duration: number) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, startTime);
+        gain.gain.setValueAtTime(0, startTime);
+        gain.gain.linearRampToValueAtTime(0.15, startTime + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(startTime);
+        osc.stop(startTime + duration);
+      };
+      playTone(1046.50, audioCtx.currentTime, 0.45); // C6
+      playTone(1567.98, audioCtx.currentTime + 0.12, 0.6); // G6
+    } catch (err) {
+      console.warn("Web Audio chime failed:", err);
+    }
+  };
+
   useEffect(() => {
+    const localUser = localStorage.getItem("user");
+    if (!localUser) return;
+    const parsed = JSON.parse(localUser);
+
     fetchNotis();
+
+    const interval = setInterval(() => {
+      getNotifications({
+        data: {
+          role: parsed.role || role,
+          orgId: parsed.org_id,
+          vendorId: parsed.vendor_id
+        }
+      })
+      .then((res) => {
+        const fresh = res || [];
+        const freshUnread = fresh.filter((n: any) => !n.read);
+        
+        setActiveNotis((prev) => {
+          const prevIds = new Set(prev.map(p => p.id));
+          const newNotifications = fresh.filter(f => !prevIds.has(f.id));
+          
+          if (newNotifications.length > 0) {
+            playChime();
+            newNotifications.forEach(n => {
+              toast.success(n.title, {
+                description: n.message,
+                duration: 6000,
+              });
+            });
+          }
+          return fresh;
+        });
+        setUnreadCount(freshUnread.length);
+      })
+      .catch(console.error);
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, [role, notiOpen]);
 
   const handleMarkRead = async (id: string) => {
@@ -88,6 +150,26 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
       fetchNotis();
     } catch (err) {
       console.error("Failed to mark read:", err);
+    }
+  };
+
+  const handleApproveWithdrawal = async (notiId: string) => {
+    setApprovingWithdrawal(true);
+    const toastId = toast.loading("Processing virtual account payout via Duesly Payment Infrastructure...");
+    try {
+      const res = await approveWithdrawalRequest({ data: { notificationId: notiId } });
+      if (res.success) {
+        toast.success("Withdrawal approved successfully! Funds have been disbursed.", { id: toastId });
+        setSelectedAlert(null);
+        fetchNotis();
+      } else {
+        toast.error(res.error || "Failed to approve withdrawal request", { id: toastId });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error approving withdrawal", { id: toastId });
+    } finally {
+      setApprovingWithdrawal(false);
     }
   };
 
@@ -256,7 +338,7 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
                 );
               })}
               <span className="ml-3 inline-flex items-center gap-1.5 rounded-full bg-emerald/10 px-2 py-0.5 text-[9px] font-semibold text-emerald uppercase tracking-wider">
-                {role === "super-admin" ? "Super-Admin Portal" : "Admin Console"}
+                {role?.toLowerCase().includes("super") ? "Super-Admin Portal" : "Admin Console"}
               </span>
             </div>
             <div className="ml-auto flex items-center gap-2 relative">
@@ -323,13 +405,15 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
         </header>
 
         <main className="px-4 pb-28 pt-6 sm:px-6 lg:pb-10">
-          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div className="min-w-0">
-              <h1 className="font-display text-2xl font-bold text-navy sm:text-3xl">{title}</h1>
-              {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
+          {(title || subtitle || actions) && (
+            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="min-w-0">
+                {title && <h1 className="font-display text-2xl font-bold text-navy sm:text-3xl">{title}</h1>}
+                {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
+              </div>
+              {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
             </div>
-            {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
-          </div>
+          )}
           {children}
         </main>
       </div>
@@ -358,23 +442,62 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
 
       {/* Alert Detail Dialog */}
       <Dialog open={!!selectedAlert} onOpenChange={(o) => !o && setSelectedAlert(null)}>
-        <DialogContent className="max-w-md rounded-2xl p-6 border border-emerald/10 shadow-elevated">
-          <DialogHeader className="pb-3 border-b border-border/60">
-            <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald ring-4 ring-emerald/20 animate-pulse" />
-              <DialogTitle className="font-display font-bold text-navy text-base">{selectedAlert?.title}</DialogTitle>
-            </div>
-          </DialogHeader>
-          <div className="py-4 space-y-3">
-            <p className="text-sm text-slate-700 leading-relaxed font-sans font-medium">{selectedAlert?.message}</p>
-            <p className="text-[10px] text-muted-foreground font-mono">
-              {selectedAlert && new Date(selectedAlert.created_at).toLocaleDateString("en-NG", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} · {selectedAlert && new Date(selectedAlert.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-            </p>
-          </div>
-          <DialogFooter className="pt-3 border-t border-border/60">
-            <Button variant="hero" className="cursor-pointer w-full sm:w-auto" onClick={() => setSelectedAlert(null)}>Dismiss Alert</Button>
-          </DialogFooter>
-        </DialogContent>
+        {(() => {
+          const phoneMatch = selectedAlert?.message?.match(/(?:Contact|Phone):\s*([+\d\s\-]+)/i);
+          const rawPhone = phoneMatch ? phoneMatch[1].trim() : "";
+          const phone = rawPhone.replace(/[\s\-()]/g, "");
+          const nameMatch = selectedAlert?.message?.match(/Member\s*"([^"]+)"/i);
+          const vendorName = nameMatch ? nameMatch[1] : "";
+          
+          return (
+            <DialogContent className="max-w-md rounded-2xl p-6 border border-emerald/10 shadow-elevated">
+              <DialogHeader className="pb-3 border-b border-border/60">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald ring-4 ring-emerald/20 animate-pulse" />
+                  <DialogTitle className="font-display font-bold text-navy text-base">{selectedAlert?.title}</DialogTitle>
+                </div>
+              </DialogHeader>
+              <div className="py-4 space-y-3">
+                <p className="text-sm text-slate-700 leading-relaxed font-sans font-medium whitespace-pre-wrap">{selectedAlert?.message}</p>
+                <p className="text-[10px] text-muted-foreground font-mono">
+                  {selectedAlert && new Date(selectedAlert.created_at).toLocaleDateString("en-NG", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} · {selectedAlert && new Date(selectedAlert.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                </p>
+                
+                {selectedAlert?.title?.toLowerCase().includes("support") && phone && (
+                  <div className="mt-4 flex gap-3 border-t pt-4">
+                    <a 
+                      href={`tel:${phone}`}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 py-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors"
+                    >
+                      <Phone className="h-3.5 w-3.5" /> Call {vendorName || "Member"}
+                    </a>
+                    <a 
+                      href={`https://wa.me/${phone.startsWith("+") ? phone.substring(1) : phone.startsWith("0") ? "234" + phone.substring(1) : phone}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 py-2.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" /> Respond via WhatsApp
+                    </a>
+                  </div>
+                )}
+              </div>
+              <DialogFooter className="pt-3 border-t border-border/60">
+                {selectedAlert?.title?.toLowerCase().includes("withdrawal") && !selectedAlert.read && (
+                  <Button 
+                    variant="hero" 
+                    className="cursor-pointer w-full sm:w-auto bg-emerald hover:bg-emerald/90 text-white" 
+                    disabled={approvingWithdrawal}
+                    onClick={() => handleApproveWithdrawal(selectedAlert.id)}
+                  >
+                    {approvingWithdrawal ? "Approving..." : "Approve Withdrawal Refund"}
+                  </Button>
+                )}
+                <Button variant={selectedAlert?.title?.toLowerCase().includes("withdrawal") && !selectedAlert.read ? "outline" : "hero"} className="cursor-pointer w-full sm:w-auto" onClick={() => setSelectedAlert(null)}>Dismiss Alert</Button>
+              </DialogFooter>
+            </DialogContent>
+          );
+        })()}
       </Dialog>
 
       {/* Sign Out Confirmation Dialog */}
@@ -415,9 +538,9 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
 export const orgAdminNav: NavItem[] = [
   { label: "Overview", to: "/dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
   { label: "Vendors", to: "/dashboard/vendors", icon: <Users className="h-4 w-4" /> },
-  { label: "Dues & Levies", to: "/dashboard/dues", icon: <Wallet className="h-4 w-4" /> },
-  { label: "Payments", to: "/dashboard/payments", icon: <CreditCard className="h-4 w-4" /> },
-  { label: "Receipts", to: "/dashboard/receipts", icon: <Receipt className="h-4 w-4" /> },
+  { label: "Dues & Levies", to: "/dashboard/dues", icon: <ClipboardList className="h-4 w-4" /> },
+  { label: "Payments", to: "/dashboard/payments", icon: <ArrowLeftRight className="h-4 w-4" /> },
+  { label: "Receipts", to: "/dashboard/receipts", icon: <FileText className="h-4 w-4" /> },
   { label: "Reports", to: "/dashboard/reports", icon: <FileBarChart2 className="h-4 w-4" /> },
   { label: "Settings", to: "/dashboard/settings", icon: <Settings className="h-4 w-4" /> },
 ];
@@ -425,7 +548,7 @@ export const orgAdminNav: NavItem[] = [
 export const superAdminNav: NavItem[] = [
   { label: "Overview", to: "/super-admin", icon: <LayoutDashboard className="h-4 w-4" /> },
   { label: "Organizations", to: "/super-admin/organizations", icon: <Building2 className="h-4 w-4" /> },
-  { label: "Transactions", to: "/super-admin/transactions", icon: <CreditCard className="h-4 w-4" /> },
+  { label: "Transactions", to: "/super-admin/transactions", icon: <ArrowLeftRight className="h-4 w-4" /> },
   { label: "Reports", to: "/super-admin/reports", icon: <FileBarChart2 className="h-4 w-4" /> },
   { label: "Settings", to: "/super-admin/settings", icon: <Settings className="h-4 w-4" /> },
 ];

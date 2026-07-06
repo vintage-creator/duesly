@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { OrgShell } from "./dashboard";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/duesly/status-badge";
-import { Download, Share2, Receipt as ReceiptIcon, Printer, CheckCircle2 } from "lucide-react";
+import { Download, Share2, FileText, Printer, CheckCircle2, Clock3, Copy, ReceiptText } from "lucide-react";
 import { formatNaira } from "@/lib/sample-data";
 import { toast } from "sonner";
 import { getReceipts } from "@/lib/db-actions";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/dashboard/receipts")({
   loader: async () => {
@@ -20,18 +20,29 @@ export const Route = createFileRoute("/dashboard/receipts")({
 function Page() {
   const receipts = Route.useLoaderData();
   const [activeOrgId, setActiveOrgId] = useState("ORG-001");
-  const [receiptsList, setReceiptsList] = useState(receipts);
+  const [orgType, setOrgType] = useState("Market");
+  const [receiptsList, setReceiptsList] = useState(receipts || []);
+  const [hydrating, setHydrating] = useState(true);
+  const [copiedReceiptId, setCopiedReceiptId] = useState<string | null>(null);
 
   useEffect(() => {
     const localUser = localStorage.getItem("user");
     if (localUser) {
       const parsed = JSON.parse(localUser);
-      if (parsed.org_id && parsed.org_id !== "ORG-001") {
+      if (parsed.org_id) {
         setActiveOrgId(parsed.org_id);
         getReceipts({ data: { orgId: parsed.org_id } })
           .then(setReceiptsList)
-          .catch(console.error);
+          .catch(console.error)
+          .finally(() => setHydrating(false));
+      } else {
+        setHydrating(false);
       }
+      if (parsed.org_type) {
+        setOrgType(parsed.org_type);
+      }
+    } else {
+      setHydrating(false);
     }
   }, [receipts]);
 
@@ -55,10 +66,38 @@ function Page() {
     setSelectedReceipt(r);
   };
 
+  const totalIssued = receiptsList.length;
+  const totalAmount = receiptsList.reduce((sum: number, r: any) => sum + Number(r.amount || 0), 0);
+  const partialCount = receiptsList.filter((r: any) => r.status?.toLowerCase() === "partial").length;
+
+  const handleShareReceipt = (r: any) => {
+    const link = `${window.location.origin}/receipts/${r.id}`;
+    navigator.clipboard?.writeText(link);
+    setCopiedReceiptId(r.id);
+    toast.success("Receipt verification link copied. Anyone with the link can view this receipt.");
+    setTimeout(() => setCopiedReceiptId((current) => current === r.id ? null : current), 2000);
+  };
+
   return (
     <OrgShell title="Receipts" subtitle="Every receipt issued from your association."
       actions={<Button variant="hero" className="cursor-pointer" onClick={handleExportAll} disabled={receiptsList.length === 0}><Download className="h-4 w-4" /> {exportingAll ? "Exporting..." : "Export all"}</Button>}>
-      <div className="rounded-2xl border bg-card shadow-soft">
+      {hydrating ? (
+        <div className="flex min-h-[360px] items-center justify-center rounded-2xl border bg-card shadow-soft">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald border-t-transparent" />
+        </div>
+      ) : (
+      <div className="space-y-4">
+        <div className="grid gap-3 md:grid-cols-3">
+          <ReceiptMetric icon={<ReceiptText className="h-5 w-5" />} label="Receipts issued" value={totalIssued.toString()} tone="emerald" />
+          <ReceiptMetric icon={<CheckCircle2 className="h-5 w-5" />} label="Verified amount" value={formatNaira(totalAmount)} tone="navy" />
+          <ReceiptMetric icon={<Clock3 className="h-5 w-5" />} label="Partial receipts" value={partialCount.toString()} tone="amber" />
+        </div>
+
+      <div className="overflow-hidden rounded-2xl border bg-card shadow-soft">
+        <div className="border-b border-border bg-secondary/30 px-5 py-4">
+          <h3 className="font-display text-base font-bold text-navy">Receipt registry</h3>
+          <p className="mt-1 text-xs text-muted-foreground">Verified receipts with public verification links for audit checks.</p>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-secondary/50 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -73,11 +112,13 @@ function Page() {
               </tr>
             </thead>
             <tbody>
-              {receiptsList.map((r) => (
-                <tr key={r.id} className="border-t border-border hover:bg-secondary/40">
+              {receiptsList.map((r) => {
+                const isPartial = r.status?.toLowerCase() === "partial";
+                return (
+                <tr key={r.id} className={`border-t border-border transition-colors ${isPartial ? "bg-amber-50/55 hover:bg-amber-50" : "hover:bg-emerald/5"}`}>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
-                      <div className="grid h-8 w-8 place-items-center rounded-lg bg-emerald/10 text-emerald"><ReceiptIcon className="h-4 w-4" /></div>
+                      <div className={`grid h-8 w-8 place-items-center rounded-lg ${isPartial ? "bg-amber-100 text-amber-700" : "bg-emerald/10 text-emerald"}`}><FileText className="h-4 w-4" /></div>
                       <span className="font-mono text-xs">{r.id}</span>
                     </div>
                   </td>
@@ -85,15 +126,18 @@ function Page() {
                   <td className="px-5 py-3 text-muted-foreground">{r.category}</td>
                   <td className="px-5 py-3 text-right font-semibold">{formatNaira(r.amount)}</td>
                   <td className="px-5 py-3 text-muted-foreground">{r.date}</td>
-                  <td className="px-5 py-3"><StatusBadge status={r.status.toLowerCase() === "issued" || r.status.toLowerCase() === "paid" ? "issued" : "partial"} /></td>
+                  <td className="px-5 py-3"><StatusBadge status={r.status?.toLowerCase() === "issued" || r.status?.toLowerCase() === "paid" ? "issued" : "partial"} /></td>
                   <td className="px-5 py-3 text-right">
                     <div className="inline-flex gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => handleDownloadReceipt(r)}><Download className="h-4 w-4" /></Button>
-                      <Button size="sm" variant="ghost" onClick={() => { navigator.clipboard?.writeText(window.location.origin + `/receipts/${r.id}`); toast.success("Share link copied to clipboard"); }}><Share2 className="h-4 w-4" /></Button>
+                      <Button size="sm" variant="ghost" title="Preview receipt" onClick={() => handleDownloadReceipt(r)}><Download className="h-4 w-4" /></Button>
+                      <Button size="sm" variant="ghost" title="Copy verification link" onClick={() => handleShareReceipt(r)}>
+                        {copiedReceiptId === r.id ? <Copy className="h-4 w-4 text-emerald" /> : <Share2 className="h-4 w-4" />}
+                      </Button>
                     </div>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
               {receiptsList.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-5 py-12 text-center text-muted-foreground">
@@ -105,6 +149,8 @@ function Page() {
           </table>
         </div>
       </div>
+      </div>
+      )}
       {/* Receipt Preview Dialog */}
       <Dialog open={!!selectedReceipt} onOpenChange={(o) => !o && setSelectedReceipt(null)}>
         <DialogContent className="max-w-sm sm:max-w-md p-6 bg-card border border-border shadow-elevated rounded-3xl animate-fade-in-up">
@@ -147,7 +193,7 @@ function Page() {
                 <span className="text-lg text-navy">Duesly</span>
               </div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mt-2.5">Official Platform Receipt</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Issued on behalf of Ariaria Market Association</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Issued on behalf of {selectedReceipt?.orgName || "Ariaria Market Association"}</p>
               <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-emerald/10 px-3 py-1 text-xs font-semibold text-emerald">
                 <CheckCircle2 className="h-4 w-4" /> Verified by Duesly
               </div>
@@ -160,7 +206,7 @@ function Page() {
             <div>
               <p className="text-xs uppercase tracking-wider text-muted-foreground">Amount Received</p>
               <p className="font-display text-4xl font-extrabold text-navy mt-1">
-                ₦{selectedReceipt ? Number(selectedReceipt.amount).toLocaleString("en-NG") : "0.00"}
+                {selectedReceipt ? formatNaira(selectedReceipt.amount) : ""}
               </p>
               <p className="text-[10px] text-muted-foreground/80 mt-1">Processed securely via Duesly Payment Infrastructure</p>
             </div>
@@ -172,11 +218,13 @@ function Page() {
                 <span className="font-mono font-semibold text-navy">{selectedReceipt?.id}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Nomba Settlement Ref</span>
-                <span className="font-mono font-semibold text-navy">NM-{selectedReceipt?.id?.replace("RCP-", "TX-")}384</span>
+                <span className="text-muted-foreground">Duesly Settlement Ref</span>
+                <span className="font-mono font-semibold text-navy">
+                  DS-TX-{(selectedReceipt ? (Math.abs(selectedReceipt.id.split("").reduce((a, c) => a + c.charCodeAt(0), 0) * 1664525) % 100000000).toString().padStart(8, "0") : "")}
+                </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Payer (Member)</span>
+                <span className="text-muted-foreground">Payer ({orgType === "Estate" ? "Resident" : orgType === "Cooperative" ? "Member" : "Vendor"})</span>
                 <span className="font-semibold text-navy">{selectedReceipt?.vendor}</span>
               </div>
               <div className="flex justify-between items-center">
@@ -269,7 +317,7 @@ function Page() {
                 <td className="py-2.5 font-mono text-[10px]">{r.id}</td>
                 <td className="py-2.5 font-semibold">{r.vendor}</td>
                 <td className="py-2.5">{r.category}</td>
-                <td className="py-2.5 text-right font-mono font-semibold">₦{Number(r.amount).toLocaleString("en-NG")}</td>
+                <td className="py-2.5 text-right font-mono font-semibold">{formatNaira(r.amount)}</td>
                 <td className="py-2.5 text-slate-500">{r.date}</td>
                 <td className="py-2.5 font-bold uppercase text-[9px] text-emerald">{r.status}</td>
               </tr>
@@ -283,5 +331,25 @@ function Page() {
         </div>
       </div>
     </OrgShell>
+  );
+}
+
+function ReceiptMetric({ icon, label, value, tone }: { icon: ReactNode; label: string; value: string; tone: "emerald" | "navy" | "amber" }) {
+  const toneClasses = {
+    emerald: "bg-emerald/10 text-emerald",
+    navy: "bg-navy/10 text-navy",
+    amber: "bg-amber-100 text-amber-700"
+  };
+
+  return (
+    <div className="rounded-2xl border bg-card p-4 shadow-soft">
+      <div className="flex items-center gap-3">
+        <div className={`grid h-10 w-10 place-items-center rounded-xl ${toneClasses[tone]}`}>{icon}</div>
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          <p className="truncate font-display text-xl font-bold text-navy">{value}</p>
+        </div>
+      </div>
+    </div>
   );
 }

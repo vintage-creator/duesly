@@ -5,12 +5,10 @@ import { Button } from "@/components/ui/button";
 import { getDashboardData } from "@/lib/db-actions";
 
 export const Route = createFileRoute("/dashboard")({
-  component: () => <Outlet />,
+  component: DashboardLayout,
 });
 
-// Shared dashboard wrapper consumed by child pages via context-free pattern:
-// each leaf renders <OrgShell title=... subtitle=...>...</OrgShell>
-export function OrgShell({ title, subtitle, actions, children }: { title: string; subtitle?: string; actions?: React.ReactNode; children: React.ReactNode }) {
+function DashboardLayout() {
   const [userName, setUserName] = useState("Admin");
   const [userRole, setUserRole] = useState("Organization Admin");
   const [suspended, setSuspended] = useState(false);
@@ -62,6 +60,12 @@ export function OrgShell({ title, subtitle, actions, children }: { title: string
         if (parsed.org_id && parsed.role !== "super-admin") {
           getDashboardData({ data: { orgId: parsed.org_id } })
             .then((res) => {
+              if (!res.orgName) {
+                // Stale session - organization was deleted or database reset
+                localStorage.removeItem("user");
+                navigate({ to: "/signup" });
+                return;
+              }
               if (res.orgStatus === "suspended") {
                 setSuspended(true);
               }
@@ -104,7 +108,11 @@ export function OrgShell({ title, subtitle, actions, children }: { title: string
   }
 
   if (loading) {
-    return <div className="min-h-screen bg-background" />;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald border-t-transparent" />
+      </div>
+    );
   }
 
   if (!authorized) {
@@ -153,13 +161,25 @@ export function OrgShell({ title, subtitle, actions, children }: { title: string
   return (
     <DashboardShell
       nav={orgAdminNav}
-      title={title}
-      subtitle={subtitle}
       role={userRole}
       user={{ name: userName, initials, org_type: orgType }}
-      actions={actions}
     >
-      {children}
+      <Outlet />
     </DashboardShell>
+  );
+}
+
+export function OrgShell({ title, subtitle, actions, children }: { title: string; subtitle?: string; actions?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="font-display text-2xl font-bold text-navy sm:text-3xl">{title}</h1>
+          {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
+        </div>
+        {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      </div>
+      {children}
+    </>
   );
 }

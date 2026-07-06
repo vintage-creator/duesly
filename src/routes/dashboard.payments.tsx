@@ -25,17 +25,23 @@ function Page() {
 
   const [activeOrgId, setActiveOrgId] = useState("ORG-001");
   const [reconciliationList, setReconciliationList] = useState(reconciliation);
+  const [hydrating, setHydrating] = useState(true);
 
   useEffect(() => {
     const localUser = localStorage.getItem("user");
     if (localUser) {
       const parsed = JSON.parse(localUser);
-      if (parsed.org_id && parsed.org_id !== "ORG-001") {
+      if (parsed.org_id) {
         setActiveOrgId(parsed.org_id);
         getReconciliations({ data: { orgId: parsed.org_id } })
           .then(setReconciliationList)
-          .catch(console.error);
+          .catch(console.error)
+          .finally(() => setHydrating(false));
+      } else {
+        setHydrating(false);
       }
+    } else {
+      setHydrating(false);
     }
   }, [reconciliation]);
 
@@ -150,6 +156,12 @@ function Page() {
     <OrgShell title="Payments & Reconciliation" subtitle="Every inflow, matched to the right vendor and category."
       actions={<Button variant="outline" onClick={() => { router.invalidate(); toast.success("Manual reconciliation refreshed"); }}><RefreshCw className="mr-2 h-4 w-4" /> Refresh feed</Button>}
     >
+      {hydrating ? (
+        <div className="flex min-h-[360px] items-center justify-center rounded-2xl border bg-card shadow-soft">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald border-t-transparent" />
+        </div>
+      ) : (
+      <>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Tile icon={<Check className="h-5 w-5" />} label="Matched" value={matched} accent="emerald" />
         <Tile icon={<ArrowUpRight className="h-5 w-5" />} label="Overpayments" value={over} accent="info" />
@@ -228,6 +240,8 @@ function Page() {
           </table>
         </div>
       </div>
+      </>
+      )}
 
       {/* Manual Match Dialog */}
       <Dialog open={!!matchingItem} onOpenChange={(o) => !o && setMatchingItem(null)}>

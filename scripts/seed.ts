@@ -25,6 +25,9 @@ console.log(`Connecting to database: ${databaseUrl}`);
 
 const pool = new Pool({
   connectionString: databaseUrl,
+  ssl: !databaseUrl.includes("localhost") && !databaseUrl.includes("127.0.0.1")
+    ? { rejectUnauthorized: false }
+    : false,
 });
 
 async function main() {
@@ -47,7 +50,15 @@ async function main() {
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         type VARCHAR(100) NOT NULL,
-        status VARCHAR(50) NOT NULL DEFAULT 'active'
+        status VARCHAR(50) NOT NULL DEFAULT 'active',
+        phone VARCHAR(100),
+        address VARCHAR(255),
+        expected_capacity INT DEFAULT 100,
+        wallet_account VARCHAR(100),
+        daily_summary_active BOOLEAN DEFAULT true,
+        sms_receipts_active BOOLEAN DEFAULT true,
+        weekly_report_active BOOLEAN DEFAULT false,
+        underpayment_alerts_active BOOLEAN DEFAULT true
       );
     `);
 
@@ -86,7 +97,11 @@ async function main() {
         amount NUMERIC(12,2) NOT NULL,
         frequency VARCHAR(50) NOT NULL,
         active BOOLEAN NOT NULL DEFAULT true,
-        vendors_count INT NOT NULL DEFAULT 0
+        vendors_count INT NOT NULL DEFAULT 0,
+        target_account VARCHAR(255) DEFAULT 'Main Settlement Wallet (Nomba)',
+        destination_bank VARCHAR(255),
+        destination_account VARCHAR(100),
+        destination_name VARCHAR(255)
       );
     `);
 
@@ -142,27 +157,34 @@ async function main() {
       );
     `);
 
+    await client.query(`
+      CREATE TABLE system_settings (
+        key VARCHAR(255) PRIMARY KEY,
+        value VARCHAR(255) NOT NULL
+      );
+    `);
+
     console.log("Seeding organizations...");
     const orgs = [
-      { id: "ORG-001", name: "Ariaria Market Association", type: "Market", status: "active" },
-      { id: "ORG-002", name: "Lekki Phase 1 Estate", type: "Estate", status: "active" },
-      { id: "ORG-003", name: "Onitsha Main Market Union", type: "Market", status: "active" },
-      { id: "ORG-004", name: "Trans-Amadi Cooperative", type: "Cooperative", status: "active" },
-      { id: "ORG-005", name: "Kano Leather Traders Assoc.", type: "Trade Group", status: "pending" },
-      { id: "ORG-006", name: "Magodo Residents Forum", type: "Estate", status: "active" },
-      { id: "ORG-007", name: "Abia State Transport Union", type: "Trade Group", status: "suspended" },
+      { id: "ORG-001", name: "Ariaria Market Association", type: "Market", status: "active", phone: "+234 803 412 9087", address: "Aba, Abia State", wallet_account: "9032 4400 01" },
+      { id: "ORG-002", name: "Lekki Phase 1 Estate", type: "Estate", status: "active", phone: "+234 809 111 2222", address: "Lekki, Lagos State", wallet_account: "9032 4400 02" },
+      { id: "ORG-003", name: "Onitsha Main Market Union", type: "Market", status: "active", phone: "+234 806 333 4444", address: "Onitsha, Anambra State", wallet_account: "9032 4400 03" },
+      { id: "ORG-004", name: "Trans-Amadi Cooperative", type: "Cooperative", status: "active", phone: "+234 805 555 6666", address: "Port Harcourt, Rivers State", wallet_account: "9032 4400 04" },
+      { id: "ORG-005", name: "Kano Leather Traders Assoc.", type: "Trade Group", status: "pending", phone: "+234 802 777 8888", address: "Kano, Kano State", wallet_account: "9032 4400 05" },
+      { id: "ORG-006", name: "Magodo Residents Forum", type: "Estate", status: "active", phone: "+234 803 999 0000", address: "Magodo, Lagos State", wallet_account: "9032 4400 06" },
+      { id: "ORG-007", name: "Abia State Transport Union", type: "Trade Group", status: "suspended", phone: "+234 808 123 4567", address: "Umuahia, Abia State", wallet_account: "9032 4400 07" },
     ];
 
     for (const org of orgs) {
       await client.query(
-        "INSERT INTO organizations (id, name, type, status) VALUES ($1, $2, $3, $4);",
-        [org.id, org.name, org.type, org.status]
+        "INSERT INTO organizations (id, name, type, status, phone, address, wallet_account) VALUES ($1, $2, $3, $4, $5, $6, $7);",
+        [org.id, org.name, org.type, org.status, org.phone, org.address, org.wallet_account]
       );
     }
 
     console.log("Seeding users...");
     const users = [
-      { email: "chuksy3@gmail.com", password: "Duesly7817##**", role: "super-admin", org_id: null, name: "Chukwudi Admin" },
+      { email: "canipf.ng@gmail.com", password: "Duesly7817##**", role: "super-admin", org_id: null, name: "Chukwudi Admin" },
       { email: "admin@ariaria.org", password: "password", role: "admin", org_id: "ORG-001", name: "Ariaria Admin" },
     ];
 
@@ -287,6 +309,20 @@ async function main() {
         `INSERT INTO notifications (id, org_id, vendor_id, role, title, message, read) 
          VALUES ($1, $2, $3, $4, $5, $6, $7);`,
         [n.id, n.org_id, n.vendor_id, n.role, n.title, n.message, n.read]
+      );
+    }
+
+    console.log("Seeding system settings...");
+    const systemSettings = [
+      { key: "auto_approve", value: "true" },
+      { key: "send_sms", value: "true" },
+      { key: "enable_ussd", value: "false" },
+      { key: "whatsapp_bot", value: "false" }
+    ];
+    for (const d of systemSettings) {
+      await client.query(
+        "INSERT INTO system_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING;",
+        [d.key, d.value]
       );
     }
 

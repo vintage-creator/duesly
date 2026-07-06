@@ -29,6 +29,7 @@ import { Route as SolutionsTradeGroupsRouteImport } from './routes/solutions.tra
 import { Route as SolutionsMarketsRouteImport } from './routes/solutions.markets'
 import { Route as SolutionsEstatesRouteImport } from './routes/solutions.estates'
 import { Route as SolutionsCooperativesRouteImport } from './routes/solutions.cooperatives'
+import { Route as ReceiptsReceiptIdRouteImport } from './routes/receipts.$receiptId'
 import { Route as DashboardVendorsRouteImport } from './routes/dashboard.vendors'
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard.settings'
 import { Route as DashboardReportsRouteImport } from './routes/dashboard.reports'
@@ -137,6 +138,11 @@ const SolutionsCooperativesRoute = SolutionsCooperativesRouteImport.update({
   path: '/solutions/cooperatives',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReceiptsReceiptIdRoute = ReceiptsReceiptIdRouteImport.update({
+  id: '/receipts/$receiptId',
+  path: '/receipts/$receiptId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardVendorsRoute = DashboardVendorsRouteImport.update({
   id: '/vendors',
   path: '/vendors',
@@ -191,6 +197,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/vendors': typeof DashboardVendorsRoute
+  '/receipts/$receiptId': typeof ReceiptsReceiptIdRoute
   '/solutions/cooperatives': typeof SolutionsCooperativesRoute
   '/solutions/estates': typeof SolutionsEstatesRoute
   '/solutions/markets': typeof SolutionsMarketsRoute
@@ -218,6 +225,7 @@ export interface FileRoutesByTo {
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/vendors': typeof DashboardVendorsRoute
+  '/receipts/$receiptId': typeof ReceiptsReceiptIdRoute
   '/solutions/cooperatives': typeof SolutionsCooperativesRoute
   '/solutions/estates': typeof SolutionsEstatesRoute
   '/solutions/markets': typeof SolutionsMarketsRoute
@@ -248,6 +256,7 @@ export interface FileRoutesById {
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/vendors': typeof DashboardVendorsRoute
+  '/receipts/$receiptId': typeof ReceiptsReceiptIdRoute
   '/solutions/cooperatives': typeof SolutionsCooperativesRoute
   '/solutions/estates': typeof SolutionsEstatesRoute
   '/solutions/markets': typeof SolutionsMarketsRoute
@@ -279,6 +288,7 @@ export interface FileRouteTypes {
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/vendors'
+    | '/receipts/$receiptId'
     | '/solutions/cooperatives'
     | '/solutions/estates'
     | '/solutions/markets'
@@ -306,6 +316,7 @@ export interface FileRouteTypes {
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/vendors'
+    | '/receipts/$receiptId'
     | '/solutions/cooperatives'
     | '/solutions/estates'
     | '/solutions/markets'
@@ -335,6 +346,7 @@ export interface FileRouteTypes {
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/vendors'
+    | '/receipts/$receiptId'
     | '/solutions/cooperatives'
     | '/solutions/estates'
     | '/solutions/markets'
@@ -359,6 +371,7 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   VendorPortalRoute: typeof VendorPortalRoute
   ApiWebhookRoute: typeof ApiWebhookRoute
+  ReceiptsReceiptIdRoute: typeof ReceiptsReceiptIdRoute
   SolutionsCooperativesRoute: typeof SolutionsCooperativesRoute
   SolutionsEstatesRoute: typeof SolutionsEstatesRoute
   SolutionsMarketsRoute: typeof SolutionsMarketsRoute
@@ -507,6 +520,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SolutionsCooperativesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/receipts/$receiptId': {
+      id: '/receipts/$receiptId'
+      path: '/receipts/$receiptId'
+      fullPath: '/receipts/$receiptId'
+      preLoaderRoute: typeof ReceiptsReceiptIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/vendors': {
       id: '/dashboard/vendors'
       path: '/vendors'
@@ -615,6 +635,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   VendorPortalRoute: VendorPortalRoute,
   ApiWebhookRoute: ApiWebhookRoute,
+  ReceiptsReceiptIdRoute: ReceiptsReceiptIdRoute,
   SolutionsCooperativesRoute: SolutionsCooperativesRoute,
   SolutionsEstatesRoute: SolutionsEstatesRoute,
   SolutionsMarketsRoute: SolutionsMarketsRoute,

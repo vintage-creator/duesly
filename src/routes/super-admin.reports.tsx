@@ -3,10 +3,10 @@ import { SuperShell } from "./super-admin";
 import { Button } from "@/components/ui/button";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatNaira, formatNumber } from "@/lib/sample-data";
-import { Download, BarChart3, Printer } from "lucide-react";
+import { Download, BarChart3, Building2, CheckCircle2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { getSuperAdminData } from "@/lib/db-actions";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 export const Route = createFileRoute("/super-admin/reports")({
   loader: async () => {
@@ -23,6 +23,8 @@ function Page() {
     collected: Math.round(o.collected / 1_000_000) 
   }));
   const isChartEmpty = data.every(item => item.collected === 0);
+  const totalCollected = organizations.reduce((sum, org) => sum + Number(org.collected || 0), 0);
+  const totalMembers = organizations.reduce((sum, org) => sum + Number(org.vendors || 0), 0);
 
   const [exporting, setExporting] = useState(false);
 
@@ -62,6 +64,12 @@ function Page() {
   return (
     <SuperShell title="Platform Reports" subtitle="Collections, growth and compliance across all organizations."
       actions={<Button variant="hero" className="cursor-pointer" onClick={handleExportPDF} disabled={organizations.length === 0}><Download className="h-4 w-4" /> {exporting ? "Exporting..." : "Export PDF"}</Button>}>
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <PlatformMetric icon={<Building2 className="h-5 w-5" />} label="Tenant organizations" value={organizations.length.toString()} tone="navy" />
+        <PlatformMetric icon={<Users className="h-5 w-5" />} label="Members tracked" value={formatNumber(totalMembers)} tone="info" />
+        <PlatformMetric icon={<CheckCircle2 className="h-5 w-5" />} label="Verified collections" value={formatNaira(totalCollected)} tone="emerald" />
+      </div>
+
       <div className="rounded-2xl border bg-card p-5 shadow-soft">
         <h3 className="font-display text-lg font-bold text-navy">Collections by organization (₦M)</h3>
         <div className="mt-4 h-80">
@@ -86,14 +94,20 @@ function Page() {
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {organizations.slice(0, 4).map((o) => (
+        {organizations.slice(0, 4).map((o) => {
+          const statusClass = o.status === "active" ? "bg-emerald/10 text-emerald" : o.status === "pending" ? "bg-amber-100 text-amber-700" : "bg-rose-50 text-rose-600";
+          return (
           <div key={o.id} className="rounded-2xl border bg-card p-5 shadow-soft">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">{o.type}</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">{o.type}</p>
+              <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${statusClass}`}>{o.status}</span>
+            </div>
             <p className="mt-1 font-display text-base font-bold text-navy truncate" title={o.name}>{o.name}</p>
             <p className="mt-3 font-display text-2xl font-bold">{formatNaira(o.collected)}</p>
             <p className="text-xs text-muted-foreground">{formatNumber(o.vendors)} vendors</p>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Hidden Printable PDF Section */}
@@ -153,7 +167,7 @@ function Page() {
                 <td className="py-2.5 font-semibold">{o.name}</td>
                 <td className="py-2.5">{o.type}</td>
                 <td className="py-2.5 text-right font-mono">{formatNumber(o.vendors)}</td>
-                <td className="py-2.5 text-right font-mono font-semibold">₦{Number(o.collected).toLocaleString("en-NG")}</td>
+                <td className="py-2.5 text-right font-mono font-semibold">{formatNaira(o.collected)}</td>
                 <td className="py-2.5 font-bold uppercase text-[9px]">{o.status}</td>
               </tr>
             ))}
@@ -166,5 +180,25 @@ function Page() {
         </div>
       </div>
     </SuperShell>
+  );
+}
+
+function PlatformMetric({ icon, label, value, tone }: { icon: ReactNode; label: string; value: string; tone: "navy" | "info" | "emerald" }) {
+  const toneClasses = {
+    navy: "bg-navy/10 text-navy",
+    info: "bg-info/10 text-info",
+    emerald: "bg-emerald/10 text-emerald"
+  };
+
+  return (
+    <div className="rounded-2xl border bg-card p-4 shadow-soft">
+      <div className="flex items-center gap-3">
+        <div className={`grid h-10 w-10 place-items-center rounded-xl ${toneClasses[tone]}`}>{icon}</div>
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          <p className="truncate font-display text-xl font-bold text-navy">{value}</p>
+        </div>
+      </div>
+    </div>
   );
 }
