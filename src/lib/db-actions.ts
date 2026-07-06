@@ -1026,8 +1026,9 @@ export const registerUser = createServerFn({ method: "POST" })
     );
 
     // 4. Send verification OTP email via Resend
+    let emailSent = false;
     try {
-      await sendEmail({
+      const emailRes = await sendEmail({
         to: data.email.toLowerCase(),
         subject: "Verification Code — Duesly",
         html: `
@@ -1042,18 +1043,18 @@ export const registerUser = createServerFn({ method: "POST" })
           </div>
         `
       });
+      emailSent = emailRes.success;
     } catch (emailErr) {
       console.error("Failed to deliver registration OTP:", emailErr);
     }
 
-    const hasResend = !!process.env.RESEND_API_KEY;
     console.log(`=== DEV REGISTRATION OTP CODE FOR ${data.email} IS: ${otp} ===`);
 
     return {
       success: true,
       otpRequired: true,
       email: data.email.toLowerCase(),
-      devOtp: hasResend ? undefined : otp,
+      devOtp: emailSent ? undefined : otp,
       user: {
         email: data.email.toLowerCase(),
         name: fullName,
