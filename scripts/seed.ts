@@ -57,7 +57,9 @@ async function main() {
         password VARCHAR(255) NOT NULL,
         role VARCHAR(50) NOT NULL DEFAULT 'admin',
         org_id VARCHAR(50) REFERENCES organizations(id) ON DELETE SET NULL,
-        name VARCHAR(255) NOT NULL
+        name VARCHAR(255) NOT NULL,
+        otp VARCHAR(6),
+        is_verified BOOLEAN NOT NULL DEFAULT FALSE
       );
     `);
 
