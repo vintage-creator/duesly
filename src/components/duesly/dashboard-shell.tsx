@@ -2,12 +2,11 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { useState, useEffect, type ReactNode } from "react";
 import {
   LayoutDashboard, Building2, Users, Receipt, FileBarChart2, Settings, CreditCard,
-  Wallet, Bell, Menu, X, Search, LogOut, ChevronLeft, ChevronRight
+  Wallet, Bell, Menu, X, LogOut, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DueslyLogo } from "./logo";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { getNotifications, markNotificationRead, clearAllNotifications } from "@/lib/db-actions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -30,6 +29,15 @@ interface DashboardShellProps {
 
 export function DashboardShell({ nav, title, subtitle, role, user, children, actions }: DashboardShellProps) {
   const path = useRouterState({ select: (s) => s.location.pathname });
+  
+  // Dynamic breadcrumbs utility
+  const pathParts = path.split("/").filter(Boolean);
+  const formatPart = (part: string) => {
+    return part
+      .replace(/-/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  };
+
   const [open, setOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [notiOpen, setNotiOpen] = useState(false);
@@ -222,9 +230,23 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
             <button onClick={() => setOpen(true)} className="rounded-lg p-2 hover:bg-secondary lg:hidden">
               <Menu className="h-5 w-5" />
             </button>
-            <div className="relative hidden flex-1 max-w-md md:block">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Search vendors, payments, receipts..." className="pl-9 bg-secondary/60 border-transparent focus-visible:bg-background" />
+            <div className="hidden md:flex items-center gap-2 text-xs font-semibold text-muted-foreground/80">
+              <span className="text-slate-400">Duesly</span>
+              <span className="text-slate-300">/</span>
+              {pathParts.map((part, idx) => {
+                const isLast = idx === pathParts.length - 1;
+                return (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className={cn(isLast ? "text-navy font-bold" : "text-muted-foreground")}>
+                      {formatPart(part)}
+                    </span>
+                    {!isLast && <span className="text-slate-300">/</span>}
+                  </div>
+                );
+              })}
+              <span className="ml-3 inline-flex items-center gap-1.5 rounded-full bg-emerald/10 px-2 py-0.5 text-[9px] font-semibold text-emerald uppercase tracking-wider">
+                {role === "super-admin" ? "Super-Admin Portal" : "Admin Console"}
+              </span>
             </div>
             <div className="ml-auto flex items-center gap-2 relative">
               <div className="relative">
