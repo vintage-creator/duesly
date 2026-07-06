@@ -7,7 +7,7 @@ import { DueslyLogo } from "@/components/duesly/logo";
 import { Mail, Phone, MapPin, Send } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
-import { sendEmail } from "@/lib/email";
+import { submitContactForm } from "@/lib/db-actions";
 import { NavigationHeader } from "@/components/duesly/header";
 import { NavigationFooter } from "@/components/duesly/footer";
 import { ScrollTopButton } from "@/components/duesly/scroll-top";
@@ -29,22 +29,8 @@ function Page() {
     setSending(true);
 
     try {
-      const emailContent = `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #f0f0f0; border-radius: 12px;">
-          <h2 style="color: #0b1a3a;">New Contact Inquiry</h2>
-          <p><strong>Name:</strong> ${name}</p>
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Subject:</strong> ${subject}</p>
-          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-          <p><strong>Message:</strong></p>
-          <p style="white-space: pre-wrap; background-color: #f7fafc; padding: 15px; border-radius: 8px;">${message}</p>
-        </div>
-      `;
-
-      const res = await sendEmail({
-        to: "chuksy3@gmail.com",
-        subject: `Duesly Inquiry: ${subject}`,
-        html: emailContent,
+      const res = await submitContactForm({
+        data: { name, email, subject, message }
       });
 
       if (res.success) {

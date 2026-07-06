@@ -1643,3 +1643,32 @@ export const getExportTransactions = createServerFn({ method: "GET" })
       section: p.section
     }));
   });
+
+export const submitContactForm = createServerFn({ method: "POST" })
+  .validator(z.object({
+    name: z.string().min(2),
+    email: z.string().email(),
+    subject: z.string().min(3),
+    message: z.string().min(5)
+  }))
+  .handler(async ({ data }) => {
+    const emailContent = `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #f0f0f0; border-radius: 12px; background-color: #ffffff;">
+        <h2 style="color: #0b1a3a;">New Contact Inquiry</h2>
+        <p><strong>Name:</strong> ${data.name}</p>
+        <p><strong>Email:</strong> ${data.email}</p>
+        <p><strong>Subject:</strong> ${data.subject}</p>
+        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+        <p><strong>Message:</strong></p>
+        <p style="white-space: pre-wrap; background-color: #f7fafc; padding: 15px; border-radius: 8px;">${data.message}</p>
+      </div>
+    `;
+
+    const res = await sendEmail({
+      to: "chuksy3@gmail.com",
+      subject: `Duesly Inquiry: ${data.subject}`,
+      html: emailContent,
+    });
+
+    return res;
+  });
