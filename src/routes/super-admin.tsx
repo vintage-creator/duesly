@@ -4,10 +4,10 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/super-admin")({
-  component: () => <Outlet />,
+  component: SuperAdminLayout,
 });
 
-export function SuperShell({ title, subtitle, actions, children }: { title: string; subtitle?: string; actions?: React.ReactNode; children: React.ReactNode }) {
+function SuperAdminLayout() {
   const [adminName, setAdminName] = useState("Super Admin");
   const [adminRole, setAdminRole] = useState("Super Admin");
   const [loading, setLoading] = useState(true);
@@ -115,13 +115,25 @@ export function SuperShell({ title, subtitle, actions, children }: { title: stri
   return (
     <DashboardShell
       nav={superAdminNav}
-      title={title}
-      subtitle={subtitle}
       role={adminRole}
       user={{ name: adminName, initials }}
-      actions={actions}
     >
-      {children}
+      <Outlet />
     </DashboardShell>
+  );
+}
+
+export function SuperShell({ title, subtitle, actions, children }: { title: string; subtitle?: string; actions?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="font-display text-2xl font-bold text-navy sm:text-3xl">{title}</h1>
+          {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
+        </div>
+        {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      </div>
+      {children}
+    </>
   );
 }
