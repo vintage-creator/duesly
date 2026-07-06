@@ -38,6 +38,7 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
   const [activeNotis, setActiveNotis] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [selectedAlert, setSelectedAlert] = useState<any | null>(null);
+  const [signOutDialogOpen, setSignOutDialogOpen] = useState(false);
 
   const fetchNotis = () => {
     const localUser = localStorage.getItem("user");
@@ -162,9 +163,13 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
           })}
         </nav>
         <div className="border-t border-sidebar-border p-3">
-          <Link to="/login" onClick={() => toast.success("Signed out")} className={cn("flex items-center gap-2 rounded-xl py-2.5 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent transition-all duration-300", isCollapsed ? "justify-center px-1" : "px-3")}>
+          <button 
+            type="button"
+            onClick={() => setSignOutDialogOpen(true)} 
+            className={cn("flex w-full items-center gap-2 rounded-xl py-2.5 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent transition-all duration-300 cursor-pointer", isCollapsed ? "justify-center px-1" : "px-3")}
+          >
             <LogOut className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Sign out</span>}
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -194,6 +199,18 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
                 );
               })}
             </nav>
+            <div className="border-t border-sidebar-border p-3">
+              <button 
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setSignOutDialogOpen(true);
+                }} 
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent transition-all cursor-pointer"
+              >
+                <LogOut className="h-4 w-4 shrink-0" /> <span>Sign out</span>
+              </button>
+            </div>
           </aside>
         </div>
       )}
@@ -323,6 +340,38 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
           </div>
           <DialogFooter className="pt-3 border-t border-border/60">
             <Button variant="hero" className="cursor-pointer w-full sm:w-auto" onClick={() => setSelectedAlert(null)}>Dismiss Alert</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sign Out Confirmation Dialog */}
+      <Dialog open={signOutDialogOpen} onOpenChange={(o) => !o && setSignOutDialogOpen(false)}>
+        <DialogContent className="max-w-xs rounded-2xl p-6 border border-border shadow-elevated">
+          <DialogHeader className="pb-2 border-b border-border/60">
+            <DialogTitle className="font-display font-bold text-navy text-sm flex items-center gap-2">
+              <LogOut className="h-4 w-4 text-amber-500" /> Confirm Sign Out
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-xs text-slate-600 leading-relaxed font-sans font-medium">
+              Are you sure you want to sign out of your Duesly account?
+            </p>
+          </div>
+          <DialogFooter className="flex flex-row gap-2 pt-2 border-t border-border/60">
+            <Button variant="ghost" className="cursor-pointer flex-1 text-xs" onClick={() => setSignOutDialogOpen(false)}>Cancel</Button>
+            <Button 
+              className="cursor-pointer flex-1 bg-rose-600 text-white hover:bg-rose-700 text-xs font-semibold" 
+              onClick={() => {
+                localStorage.removeItem("user");
+                toast.success("Signed out successfully");
+                setSignOutDialogOpen(false);
+                setTimeout(() => {
+                  window.location.href = "/login";
+                }, 200);
+              }}
+            >
+              Sign Out
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
