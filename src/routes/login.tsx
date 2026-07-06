@@ -6,7 +6,7 @@ import { DueslyLogo } from "@/components/duesly/logo";
 import { ShieldCheck, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
-import { loginUser } from "@/lib/db-actions";
+import { loginUser, resetPassword } from "@/lib/db-actions";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Sign in — Duesly" }, { name: "description", content: "Sign in to your Duesly account." }] }),
@@ -22,11 +22,15 @@ function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Pre-fill email if returned from forgot-password reset flow
+  const [isResetFlow, setIsResetFlow] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
   useEffect(() => {
     if (search?.reset_email) {
       setEmail(search.reset_email);
-      toast.info("Input your new password to sign in");
+      setIsResetFlow(true);
+      toast.info("Please set your new password below.");
     }
   }, [search]);
 
@@ -56,6 +60,92 @@ function Login() {
       setLoading(false);
     }
   };
+
+  const handleResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters long");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await resetPassword({ data: { email: search.reset_email, password: newPassword } });
+      if (res.success) {
+        toast.success("Password updated successfully! You can now sign in.");
+        setIsResetFlow(false);
+        setPassword("");
+        navigate({ to: "/login", replace: true });
+      } else {
+        toast.error(res.error || "Failed to update password");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error updating password");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (isResetFlow) {
+    return (
+      <AuthShell title="Reset your password" subtitle={`Create a secure new password for ${search?.reset_email}`}>
+        <form onSubmit={handleResetSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="new-password">New Password</Label>
+            <div className="relative">
+              <Input 
+                id="new-password" 
+                type={showPassword ? "text" : "password"} 
+                required 
+                value={newPassword} 
+                onChange={(e) => setNewPassword(e.target.value)} 
+                placeholder="New Password (min 6 chars)"
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-navy cursor-pointer flex items-center justify-center"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="confirm-password">Confirm Password</Label>
+            <Input 
+              id="confirm-password" 
+              type="password" 
+              required 
+              value={confirmPassword} 
+              onChange={(e) => setConfirmPassword(e.target.value)} 
+              placeholder="Confirm new password"
+            />
+          </div>
+          <Button type="submit" variant="hero" size="lg" className="w-full" disabled={loading}>
+            {loading ? "Updating password..." : "Update Password"}
+          </Button>
+          <p className="text-center text-sm text-muted-foreground">
+            Remember your password?{" "}
+            <button 
+              type="button" 
+              className="font-medium text-navy hover:underline cursor-pointer"
+              onClick={() => {
+                setIsResetFlow(false);
+                navigate({ to: "/login", replace: true });
+              }}
+            >
+              Sign in
+            </button>
+          </p>
+        </form>
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell title="Welcome back" subtitle="Sign in to manage your collections and dues.">

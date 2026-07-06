@@ -895,6 +895,23 @@ export const forgotPassword = createServerFn({ method: "POST" })
     return { success: true, message: "If this email is registered, a password reset link has been sent." };
   });
 
+export const resetPassword = createServerFn({ method: "POST" })
+  .validator(z.object({
+    email: z.string().email(),
+    password: z.string().min(6)
+  }))
+  .handler(async ({ data }) => {
+    const res = await pool.query("SELECT * FROM users WHERE LOWER(email) = $1 LIMIT 1", [data.email.toLowerCase()]);
+    if (res.rowCount === 0) {
+      return { success: false, error: "Account not found." };
+    }
+    await pool.query(
+      "UPDATE users SET password = $1 WHERE LOWER(email) = $2",
+      [data.password, data.email.toLowerCase()]
+    );
+    return { success: true };
+  });
+
 // Dynamic Settings Update
 export const updateUserProfile = createServerFn({ method: "POST" })
   .validator(z.object({
