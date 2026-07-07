@@ -2,12 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { SuperShell } from "./super-admin";
 import { StatCard } from "@/components/duesly/stat-card";
 import { StatusBadge } from "@/components/duesly/status-badge";
-import { Building2, Users, TrendingUp, Activity, Download } from "lucide-react";
+import { Building2, Users, TrendingUp, Activity, Download, Wallet, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { formatNaira, formatNumber, monthlyTrend } from "@/lib/sample-data";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { toast } from "sonner";
-import { getSuperAdminData } from "@/lib/db-actions";
+import { getSuperAdminData, submitSuperAdminWithdrawal } from "@/lib/db-actions";
 import { useState } from "react";
 
 export const Route = createFileRoute("/super-admin/")({
@@ -19,7 +22,79 @@ export const Route = createFileRoute("/super-admin/")({
 });
 
 function Page() {
-  const { stats, organizations, trend } = Route.useLoaderData();
+  const { stats, organizations, trend, wallet: initialWallet } = Route.useLoaderData();
+  const [walletState, setWalletState] = useState(initialWallet || { balance: 0, savedBankName: "", savedAccountNumber: "", savedAccountName: "" });
+
+  const [withdrawalOpen, setWithdrawalOpen] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawBank, setWithdrawBank] = useState(initialWallet?.savedBankName || "Zenith Bank");
+  const [withdrawAccount, setWithdrawAccount] = useState(initialWallet?.savedAccountNumber || "");
+  const [withdrawAccountName, setWithdrawAccountName] = useState(initialWallet?.savedAccountName || "");
+  const [saveDetails, setSaveDetails] = useState(true);
+  const [submittingWithdrawal, setSubmittingWithdrawal] = useState(false);
+
+  const handleWithdrawalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amountNum = parseFloat(withdrawAmount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      toast.error("Please enter a valid positive amount.");
+      return;
+    }
+    if (amountNum > walletState.balance) {
+      toast.error(`Insufficient balance. Maximum withdrawable: ₦${walletState.balance.toLocaleString()}`);
+      return;
+    }
+    if (withdrawAccount.length !== 10) {
+      toast.error("Please enter a valid 10-digit account number.");
+      return;
+    }
+    if (!withdrawAccountName.trim()) {
+      toast.error("Please enter the recipient account name.");
+      return;
+    }
+
+    setSubmittingWithdrawal(true);
+    const toastId = toast.loading("Processing platform profit withdrawal...");
+    try {
+      const localUser = localStorage.getItem("user");
+      const parsed = localUser ? JSON.parse(localUser) : null;
+      if (!parsed?.email) {
+        toast.error("Super admin session expired. Please sign in again.", { id: toastId });
+        return;
+      }
+
+      const res = await submitSuperAdminWithdrawal({
+        data: {
+          email: parsed.email,
+          amount: amountNum,
+          bankName: withdrawBank,
+          accountNumber: withdrawAccount,
+          accountName: withdrawAccountName,
+          saveDetails: saveDetails
+        }
+      });
+
+      if (res.success) {
+        toast.success(`Platform profit withdrawal of ₦${amountNum.toLocaleString()} processed successfully!`, { id: toastId });
+        setWithdrawAmount("");
+        setWithdrawalOpen(false);
+        setWalletState({
+          balance: walletState.balance - amountNum,
+          savedBankName: saveDetails ? withdrawBank : walletState.savedBankName,
+          savedAccountNumber: saveDetails ? withdrawAccount : walletState.savedAccountNumber,
+          savedAccountName: saveDetails ? withdrawAccountName : walletState.savedAccountName
+        });
+      } else {
+        toast.error(res.error || "Failed to withdraw platform profits", { id: toastId });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Connection error during withdrawal processing", { id: toastId });
+    } finally {
+      setSubmittingWithdrawal(false);
+    }
+  };
+
   const isTrendEmpty = (trend || []).every(t => t.collected === 0);
   const activeRate = stats.totalOrgs > 0 ? Math.round((stats.activeOrgs / stats.totalOrgs) * 100) : 0;
 
@@ -41,6 +116,134 @@ function Page() {
     <SuperShell title="Platform Overview" subtitle="All organizations powered by Duesly"
       actions={<Button variant="outline" className="cursor-pointer" onClick={handleExportPDF} disabled={organizations.length === 0}><Download className="h-4 w-4" /> {exporting ? "Exporting..." : "Export"}</Button>}
     >
+      {/* Super Admin Profit Wallet Banner */}
+      <div className="mb-6 rounded-2xl border border-emerald/20 bg-gradient-to-r from-emerald/5 via-teal/5 to-navy/5 p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-xl bg-gradient-emerald text-white flex items-center justify-center shadow-emerald">
+            <Wallet className="h-6 w-6" />
+          </div>
+          <div>
+            <h4 className="font-display font-bold text-navy text-xs uppercase tracking-wider text-muted-foreground/60">Platform Profit Wallet</h4>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-display font-extrabold text-navy">{formatNaira(walletState.balance)}</span>
+              <span className="text-[10px] bg-emerald/10 text-emerald-800 px-2 py-0.5 rounded-full font-semibold">₦100 Flat Transaction Fee</span>
+            </div>
+          </div>
+        </div>
+
+        <Dialog open={withdrawalOpen} onOpenChange={setWithdrawalOpen}>
+          <DialogTrigger asChild>
+            <Button variant="hero" size="sm" className="cursor-pointer gap-2" onClick={() => setWithdrawalOpen(true)}>
+              <ArrowUpRight className="h-4 w-4" /> Withdraw Profits
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md p-6 bg-card border border-border shadow-elevated rounded-3xl animate-fade-in-up">
+            <DialogHeader className="pb-3 border-b">
+              <DialogTitle className="font-display font-bold text-navy text-lg flex items-center gap-2">
+                <Wallet className="h-5 w-5 text-emerald" /> Withdraw Platform Profits
+              </DialogTitle>
+            </DialogHeader>
+
+            <form onSubmit={handleWithdrawalSubmit} className="mt-4 space-y-4">
+              <div className="bg-emerald/5 rounded-2xl p-4 border border-emerald/10 text-xs text-emerald-800 space-y-1">
+                <p className="font-semibold">Profit Wallet Payout Transfer</p>
+                <p>Transfer accumulated platform transaction fee profits directly to your personal bank account. This initiates a real-time transfer via Nomba MFB.</p>
+              </div>
+
+              <div>
+                <Label htmlFor="super-withdraw-amount" className="text-xs font-semibold text-slate-600">Amount (₦)</Label>
+                <Input 
+                  id="super-withdraw-amount"
+                  type="number"
+                  required
+                  min="1"
+                  max={walletState.balance}
+                  placeholder={`e.g. 5000 (Available: ₦${walletState.balance.toLocaleString()})`}
+                  value={withdrawAmount}
+                  onChange={(e) => setWithdrawAmount(e.target.value)}
+                  className="mt-1.5"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="super-withdraw-bank" className="text-xs font-semibold text-slate-600">Destination Bank Name</Label>
+                <select 
+                  id="super-withdraw-bank"
+                  value={withdrawBank}
+                  onChange={(e) => setWithdrawBank(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-navy outline-none focus:ring-2 focus:ring-emerald/20"
+                >
+                  <option value="Zenith Bank">Zenith Bank</option>
+                  <option value="Access Bank">Access Bank</option>
+                  <option value="Guaranty Trust Bank (GTB)">Guaranty Trust Bank (GTB)</option>
+                  <option value="United Bank for Africa (UBA)">United Bank for Africa (UBA)</option>
+                  <option value="First Bank">First Bank</option>
+                  <option value="OPay (Paycom)">OPay (Paycom)</option>
+                  <option value="PalmPay">PalmPay</option>
+                  <option value="Moniepoint MFB">Moniepoint MFB</option>
+                  <option value="Kuda Microfinance Bank">Kuda Microfinance Bank</option>
+                  <option value="Stanbic IBTC Bank">Stanbic IBTC Bank</option>
+                  <option value="Sterling Bank">Sterling Bank</option>
+                  <option value="Union Bank">Union Bank</option>
+                  <option value="Wema Bank">Wema Bank</option>
+                  <option value="Fidelity Bank">Fidelity Bank</option>
+                  <option value="Polaris Bank">Polaris Bank</option>
+                  <option value="FCMB">FCMB</option>
+                  <option value="Nombank MFB">Nombank MFB</option>
+                </select>
+              </div>
+
+              <div>
+                <Label htmlFor="super-withdraw-account" className="text-xs font-semibold text-slate-600">Destination Account Number</Label>
+                <Input 
+                  id="super-withdraw-account"
+                  type="text"
+                  required
+                  maxLength={10}
+                  placeholder="10-digit Nuban account number"
+                  value={withdrawAccount}
+                  onChange={(e) => setWithdrawAccount(e.target.value.replace(/\D/g, ""))}
+                  className="mt-1.5"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="super-withdraw-name" className="text-xs font-semibold text-slate-600">Recipient Account Name</Label>
+                <Input 
+                  id="super-withdraw-name"
+                  type="text"
+                  required
+                  placeholder="e.g. John Doe"
+                  value={withdrawAccountName}
+                  onChange={(e) => setWithdrawAccountName(e.target.value)}
+                  className="mt-1.5"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input 
+                  id="super-save-details" 
+                  type="checkbox" 
+                  checked={saveDetails} 
+                  onChange={(e) => setSaveDetails(e.target.checked)}
+                  className="rounded border-border text-emerald focus:ring-emerald cursor-pointer"
+                />
+                <Label htmlFor="super-save-details" className="text-xs text-muted-foreground cursor-pointer select-none">Save these bank details for future withdrawals</Label>
+              </div>
+
+              <DialogFooter className="mt-6 flex flex-row justify-end gap-2 border-t pt-4">
+                <Button type="button" variant="outline" className="cursor-pointer flex-1 sm:flex-none" onClick={() => setWithdrawalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="hero" className="cursor-pointer flex-1 sm:flex-none" disabled={submittingWithdrawal || walletState.balance <= 0}>
+                  {submittingWithdrawal ? "Transferring..." : "Confirm Payout"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Organizations" value={formatNumber(stats.totalOrgs)} delta="+3 this quarter" trend="up" accent="navy" icon={<Building2 className="h-5 w-5" />} />
         <StatCard label="Vendors / Members" value={formatNumber(stats.totalMembers)} delta="Across all orgs" accent="info" icon={<Users className="h-5 w-5" />} />

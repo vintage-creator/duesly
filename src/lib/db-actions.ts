@@ -19,6 +19,18 @@ export async function writeAuditLog(orgId: string | null, userEmail: string | nu
   }
 }
 
+export async function creditPlatformFee(paymentAmount: number) {
+  const platformFee = paymentAmount > 100 ? 100 : Math.round(paymentAmount * 0.1);
+  if (platformFee <= 0) return 0;
+  
+  console.log(`Crediting platform fee of ₦${platformFee} to Super Admin wallet (payment: ₦${paymentAmount})`);
+  await pool.query(
+    "UPDATE super_admin_wallet SET balance = balance + $1",
+    [platformFee]
+  );
+  return platformFee;
+}
+
 function parseCSVLine(line: string) {
   const values: string[] = [];
   let current = "";
@@ -704,6 +716,9 @@ export const getSuperAdminData = createServerFn({ method: "GET" })
       }
     }
 
+    const walletRes = await pool.query("SELECT * FROM super_admin_wallet LIMIT 1");
+    const wallet = walletRes.rows[0] || { balance: 0, saved_bank_name: null, saved_account_number: null, saved_account_name: null };
+
     return {
       stats: {
         totalOrgs,
@@ -721,7 +736,13 @@ export const getSuperAdminData = createServerFn({ method: "GET" })
         collected: parseFloat(o.collected_amount || "0"),
         expectedCapacity: parseInt(o.expected_capacity || "100"),
       })),
-      trend
+      trend,
+      wallet: {
+        balance: parseFloat(wallet.balance),
+        savedBankName: wallet.saved_bank_name,
+        savedAccountNumber: wallet.saved_account_number,
+        savedAccountName: wallet.saved_account_name
+      }
     };
   });
 
@@ -969,6 +990,9 @@ export const getVendorPortal = createServerFn({ method: "POST" })
 
                 newTxnsCount++;
 
+                // Credit platform fee to Super Admin wallet
+                const platformFee = await creditPlatformFee(txnAmount);
+
                 // 1. Update vendor paid & status
                 const currentPaid = parseFloat(vendor.paid) || 0;
                 const currentDue = parseFloat(vendor.due) || 0;
@@ -989,8 +1013,8 @@ export const getVendorPortal = createServerFn({ method: "POST" })
                   year: "numeric",
                 });
                 await pool.query(
-                  `INSERT INTO payments (id, org_id, vendor_id, vendor_name, account, amount, category, date, status)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                  `INSERT INTO payments (id, org_id, vendor_id, vendor_name, account, amount, fee, category, date, status)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
                   [
                     txnRef,
                     vendor.org_id,
@@ -998,6 +1022,7 @@ export const getVendorPortal = createServerFn({ method: "POST" })
                     vendor.name,
                     vendor.virtual_account,
                     txnAmount,
+                    platformFee,
                     "Monthly Levy",
                     "Today, " + new Date().toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" }),
                     ledger.paymentStatus,
@@ -1049,8 +1074,8 @@ export const getVendorPortal = createServerFn({ method: "POST" })
                   console.error("Resend delivery failed:", err);
                 });
 
-                // Trigger auto-settlement split disbursement
-                dispatchAutoSettlementSplits(vendor.org_id, vendor.id, vendor.name, txnAmount).catch((err) => {
+                // Trigger auto-settlement split disbursement using the net amount (gross - fee)
+                dispatchAutoSettlementSplits(vendor.org_id, vendor.id, vendor.name, txnAmount - platformFee).catch((err) => {
                   console.error("Auto-settlement splits trigger failed:", err);
                 });
               }
@@ -3059,6 +3084,131 @@ export const approveWithdrawalRequest = createServerFn({ method: "POST" })
       data.adminEmail,
       "Approve Withdrawal",
       `Approved withdrawal of ₦${amount.toLocaleString()} for vendor "${vendor.name}" (ID: ${vendor.id}) to ${rawBank} (${destinationAccount}) [Txn ID: ${txnId}]`
+    );
+
+    return { success: true };
+  });
+
+// Super Admin Profit Payout Withdrawal
+export const submitSuperAdminWithdrawal = createServerFn({ method: "POST" })
+  .validator(z.object({
+    email: z.string().email(),
+    amount: z.number().positive(),
+    bankName: z.string().min(1),
+    accountNumber: z.string().length(10),
+    accountName: z.string().min(1),
+    saveDetails: z.boolean()
+  }))
+  .handler(async ({ data }) => {
+    // 1. Verify user exists and is a super-admin
+    const userCheck = await pool.query(
+      "SELECT role FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1",
+      [data.email]
+    );
+    if (userCheck.rowCount === 0 || userCheck.rows[0].role !== "super-admin") {
+      return { success: false, error: "Unauthorized. Requires Super Admin privileges." };
+    }
+
+    // 2. Fetch profit wallet balance
+    const walletRes = await pool.query("SELECT balance FROM super_admin_wallet LIMIT 1");
+    const wallet = walletRes.rows[0];
+    if (!wallet) {
+      return { success: false, error: "Platform profit wallet not initialized" };
+    }
+    const balance = parseFloat(wallet.balance);
+    if (data.amount > balance) {
+      return { success: false, error: `Insufficient wallet balance. Available: ₦${balance.toLocaleString()}` };
+    }
+
+    // 3. Resolve bank code
+    const getBankCode = (bankName: string) => {
+      const name = bankName.toLowerCase();
+      if (name.includes("zenith")) return "057";
+      if (name.includes("access")) return "044";
+      if (name.includes("guaranty") || name.includes("gtb") || name.includes("gtbank")) return "058";
+      if (name.includes("united") || name.includes("uba")) return "033";
+      if (name.includes("first")) return "011";
+      if (name.includes("opay") || name.includes("paycom")) return "305";
+      if (name.includes("palmpay")) return "100033";
+      if (name.includes("moniepoint")) return "090405";
+      if (name.includes("kuda")) return "090267";
+      if (name.includes("stanbic")) return "039";
+      if (name.includes("sterling")) return "050";
+      if (name.includes("union")) return "032";
+      if (name.includes("wema")) return "035";
+      if (name.includes("fidelity")) return "070";
+      if (name.includes("polaris")) return "076";
+      if (name.includes("fcmb")) return "214";
+      if (name.includes("nombank") || name.includes("nomba")) return "090001";
+      return "057";
+    };
+
+    const bankCode = getBankCode(data.bankName);
+
+    // 4. Trigger live Nomba payout transfer
+    try {
+      const accessToken = await getNombaAccessToken();
+      const parentAccountId = process.env.NOMBA_PARENT_ACCOUNT_ID;
+      if (!accessToken || !parentAccountId) {
+        return { success: false, error: "Nomba payout credentials missing on server" };
+      }
+
+      const txnId = "WDS-" + Math.floor(100000 + Math.random() * 900000);
+      console.log(`Executing live Super Admin profit withdrawal of ₦${data.amount} to ${data.accountNumber} (${data.bankName})`);
+
+      const transferRes = await fetch("https://api.nomba.com/v2/transfers/bank", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${accessToken}`,
+          "accountId": parentAccountId
+        },
+        body: JSON.stringify({
+          amount: data.amount,
+          accountNumber: data.accountNumber,
+          accountName: data.accountName,
+          bankCode: bankCode,
+          merchantTxRef: txnId,
+          senderName: "Duesly Pay Technologies",
+          narration: `Super Admin Profit Payout`
+        })
+      });
+
+      if (!transferRes.ok) {
+        const errBody = await transferRes.text();
+        console.error(`Super Admin payout failed: ${transferRes.status} - ${errBody}`);
+        let errMsg = `Nomba Error (${transferRes.status})`;
+        try {
+          const parsedErr = JSON.parse(errBody);
+          errMsg = parsedErr.description || parsedErr.message || errMsg;
+        } catch (_) {}
+        return { success: false, error: `Nomba Payout Failed: ${errMsg}` };
+      }
+
+      const transferData = await transferRes.json();
+      console.log("Super Admin payout successful:", transferData);
+
+    } catch (err: any) {
+      console.error("Failed to execute live Nomba transfer for Super Admin:", err);
+      return { success: false, error: `Connection failed: ${err.message || err}` };
+    }
+
+    // 5. Update profit wallet balance & saved details
+    await pool.query(
+      `UPDATE super_admin_wallet 
+       SET balance = balance - $1,
+           saved_bank_name = CASE WHEN $2 = true THEN $3 ELSE saved_bank_name END,
+           saved_account_number = CASE WHEN $2 = true THEN $4 ELSE saved_account_number END,
+           saved_account_name = CASE WHEN $2 = true THEN $5 ELSE saved_account_name END`,
+      [data.amount, data.saveDetails, data.bankName, data.accountNumber, data.accountName]
+    );
+
+    // 6. Write audit log
+    await writeAuditLog(
+      null,
+      data.email,
+      "Profit Withdrawal",
+      `Withdrew ₦${data.amount.toLocaleString()} platform profits to ${data.bankName} (${data.accountNumber} - ${data.accountName})`
     );
 
     return { success: true };

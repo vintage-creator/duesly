@@ -34,6 +34,7 @@ async function main() {
   const client = await pool.connect();
   try {
     console.log("Dropping tables if they exist...");
+    await client.query("DROP TABLE IF EXISTS super_admin_wallet CASCADE;");
     await client.query("DROP TABLE IF EXISTS audit_logs CASCADE;");
     await client.query("DROP TABLE IF EXISTS notifications CASCADE;");
     await client.query("DROP TABLE IF EXISTS users CASCADE;");
@@ -106,6 +107,17 @@ async function main() {
     `);
 
     await client.query(`
+      CREATE TABLE super_admin_wallet (
+        balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+        saved_bank_name VARCHAR(255) DEFAULT NULL,
+        saved_account_number VARCHAR(10) DEFAULT NULL,
+        saved_account_name VARCHAR(255) DEFAULT NULL
+      );
+    `);
+
+    await client.query("INSERT INTO super_admin_wallet (balance) VALUES (0);");
+
+    await client.query(`
       CREATE TABLE dues_categories (
         id VARCHAR(50) PRIMARY KEY,
         org_id VARCHAR(50) REFERENCES organizations(id) ON DELETE CASCADE,
@@ -129,6 +141,7 @@ async function main() {
         vendor_name VARCHAR(255) NOT NULL,
         account VARCHAR(100) NOT NULL,
         amount NUMERIC(12,2) NOT NULL,
+        fee NUMERIC(12,2) NOT NULL DEFAULT 0,
         category VARCHAR(255) NOT NULL,
         date VARCHAR(100) NOT NULL,
         status VARCHAR(50) NOT NULL

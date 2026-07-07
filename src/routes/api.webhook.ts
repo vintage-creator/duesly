@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { pool } from "@/lib/db";
 import crypto from "crypto";
 import { sendPaymentAlert } from "@/lib/email";
-import { dispatchAutoSettlementSplits, getLedgerSnapshot } from "@/lib/db-actions";
+import { dispatchAutoSettlementSplits, getLedgerSnapshot, creditPlatformFee } from "@/lib/db-actions";
 import { generateReceiptId } from "@/lib/receipt-utils";
 
 function getNestedValue(source: any, paths: string[]) {
@@ -142,6 +142,10 @@ export const Route = createFileRoute("/api/webhook")({
 
           if (vendorRes.rowCount && vendorRes.rowCount > 0) {
             const vendor = vendorRes.rows[0];
+
+            // Credit platform fee to Super Admin wallet
+            const platformFee = await creditPlatformFee(amount);
+
             const due = parseFloat(vendor.due);
             const ledger = getLedgerSnapshot(parseFloat(vendor.paid), due, amount);
 
@@ -153,8 +157,8 @@ export const Route = createFileRoute("/api/webhook")({
 
             // Insert payment log
             await pool.query(
-              `INSERT INTO payments (id, org_id, vendor_id, vendor_name, account, amount, category, date, status)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+              `INSERT INTO payments (id, org_id, vendor_id, vendor_name, account, amount, fee, category, date, status)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
               [
                 txnId,
                 vendor.org_id,
@@ -162,6 +166,7 @@ export const Route = createFileRoute("/api/webhook")({
                 vendor.name,
                 vendor.virtual_account,
                 amount,
+                platformFee,
                 "Monthly Levy",
                 "Today, " + new Date().toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" }),
                 ledger.paymentStatus,
@@ -209,8 +214,8 @@ export const Route = createFileRoute("/api/webhook")({
                 }).catch((e) => console.error(e));
               });
 
-            // Trigger auto-settlement split disbursement
-            dispatchAutoSettlementSplits(vendor.org_id, vendor.id, vendor.name, amount).catch((err) => {
+            // Trigger auto-settlement split disbursement using the net amount (gross - fee)
+            dispatchAutoSettlementSplits(vendor.org_id, vendor.id, vendor.name, amount - platformFee).catch((err) => {
               console.error("Auto-settlement splits trigger failed:", err);
             });
 
