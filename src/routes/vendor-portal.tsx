@@ -778,13 +778,29 @@ function Page() {
               )}
             </div>
 
-            <div className="grid h-9 w-9 place-items-center rounded-full bg-gradient-emerald text-sm font-semibold text-white shadow-emerald">
-              {initials}
-            </div>
-            <Button variant="ghost" className="text-slate-500 hover:text-rose-600 hover:bg-rose-50/50 cursor-pointer h-9 px-3 rounded-xl gap-2 font-medium" onClick={handleLogout}>
-              <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline text-xs">Sign Out</span>
-            </Button>
+            {!isLookupOnly ? (
+              <>
+                <div className="grid h-9 w-9 place-items-center rounded-full bg-gradient-emerald text-sm font-semibold text-white shadow-emerald">
+                  {initials}
+                </div>
+                <Button variant="ghost" className="text-slate-500 hover:text-rose-600 hover:bg-rose-50/50 cursor-pointer h-9 px-3 rounded-xl gap-2 font-medium" onClick={handleLogout}>
+                  <LogOut className="h-4 w-4" />
+                  <span className="hidden sm:inline text-xs">Sign Out</span>
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link to="/login">
+                  <Button variant="outline" size="sm" className="cursor-pointer text-xs rounded-xl h-9 px-4 font-semibold text-navy hover:bg-secondary">
+                    Sign In
+                  </Button>
+                </Link>
+                <Button variant="ghost" className="text-slate-500 hover:text-rose-600 hover:bg-rose-50/50 cursor-pointer h-9 px-3 rounded-xl gap-2 font-medium" onClick={handleLogout}>
+                  <LogOut className="h-4 w-4" />
+                  <span className="hidden sm:inline text-xs">Exit Search</span>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -860,9 +876,8 @@ function Page() {
 
         {isLookupOnly && (
           <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-xs text-blue-800 flex items-center justify-between gap-4 shadow-sm animate-fade-in">
-            <p className="flex items-center gap-1.5 font-sans leading-relaxed">
-              <span>ℹ️</span> 
-              <span><strong>Read-Only Lookup Mode:</strong> You are viewing payments and compliance status. Payout withdrawals and credentials setup require signing in securely.</span>
+            <p className="font-sans leading-relaxed">
+              <strong>Read-Only Lookup Mode:</strong> You are viewing payments and compliance status. Payout withdrawals and credentials setup require signing in securely.
             </p>
             <Link to="/login" className="font-semibold underline hover:text-blue-900 shrink-0">Sign In</Link>
           </div>
