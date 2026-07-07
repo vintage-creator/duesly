@@ -373,7 +373,7 @@ function Page() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-display text-lg font-bold text-navy">Collection trend</h3>
-              <p className="text-sm text-muted-foreground">Collected vs expected — last 6 months (₦M)</p>
+              <p className="text-sm text-muted-foreground">Collected vs expected — last 6 months {statsData.suffix ? `(₦${statsData.suffix})` : "(₦)"}</p>
             </div>
           </div>
           <div className="mt-4 h-72">

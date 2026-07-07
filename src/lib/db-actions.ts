@@ -164,6 +164,18 @@ export const getDashboardData = createServerFn({ method: "GET" })
       color: colors[idx % colors.length]
     }));
 
+    // Dynamic scale divisor and suffix based on collections
+    let divisor = 1;
+    let suffix = "";
+    const maxVal = Math.max(collected, expected);
+    if (maxVal >= 1000000) {
+      divisor = 1000000;
+      suffix = "M";
+    } else if (maxVal >= 1000) {
+      divisor = 1000;
+      suffix = "K";
+    }
+
     // 5. Build dynamic 6-month collection trend
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const currentMonthIdx = new Date().getMonth();
@@ -176,8 +188,8 @@ export const getDashboardData = createServerFn({ method: "GET" })
       if (idx === currentMonthIdx) {
         trend.push({
           month: monthName,
-          collected: Number((collected / 1000000).toFixed(3)),
-          expected: Number((expected / 1000000).toFixed(3))
+          collected: Number((collected / divisor).toFixed(2)),
+          expected: Number((expected / divisor).toFixed(2))
         });
       } else {
         trend.push({
@@ -214,7 +226,8 @@ export const getDashboardData = createServerFn({ method: "GET" })
         partial: partialCount,
         unpaid: unpaidCount,
         overpaid: overpaidCount,
-        totalRefunded
+        totalRefunded,
+        suffix: suffix
       },
       recentPayments: paymentsRes.rows.map(p => ({
         id: p.id,
