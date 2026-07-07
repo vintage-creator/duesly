@@ -35,31 +35,20 @@ function Page() {
     }
   }, [receipts]);
 
+  const [printableReceipts, setPrintableReceipts] = useState<any[]>([]);
+  const [exportingAll, setExportingAll] = useState(false);
+
   const handleExportAll = () => {
     if (receiptsList.length === 0) {
       toast.error("No receipts available to export.");
       return;
     }
-    const headers = ["Receipt ID", "Vendor Name", "Category", "Amount Paid (₦)", "Date", "Status"];
-    const csvRows = [headers.join(",")];
-    receiptsList.forEach(r => {
-      csvRows.push([
-        r.id,
-        `"${r.vendor}"`,
-        r.category,
-        r.amount,
-        `"${r.date}"`,
-        r.status
-      ].join(","));
-    });
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute("download", `duesly_receipts_report.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success("All association receipts downloaded!");
+    setExportingAll(true);
+    setPrintableReceipts(receiptsList);
+    setTimeout(() => {
+      window.print();
+      setExportingAll(false);
+    }, 400);
   };
 
   const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
@@ -70,7 +59,7 @@ function Page() {
 
   return (
     <OrgShell title="Receipts" subtitle="Every receipt issued from your association."
-      actions={<Button variant="hero" onClick={handleExportAll} disabled={receiptsList.length === 0}><Download className="h-4 w-4" /> Export all</Button>}>
+      actions={<Button variant="hero" className="cursor-pointer" onClick={handleExportAll} disabled={receiptsList.length === 0}><Download className="h-4 w-4" /> {exportingAll ? "Exporting..." : "Export all"}</Button>}>
       <div className="rounded-2xl border bg-card shadow-soft">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -225,6 +214,75 @@ function Page() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Hidden Printable PDF Section */}
+      <div id="printable-ledger" className="hidden">
+        <style>{`
+          @media print {
+            body * {
+              visibility: hidden;
+            }
+            #printable-ledger, #printable-ledger * {
+              visibility: visible;
+            }
+            #printable-ledger {
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: 100%;
+              background: white !important;
+              color: black !important;
+              font-family: sans-serif;
+              padding: 24px;
+            }
+          }
+        `}</style>
+        <div className="flex justify-between items-center border-b pb-6 mb-6">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-2xl tracking-tight text-slate-900">duesly</span>
+              <span className="text-[10px] border border-slate-900 px-2 py-0.5 rounded font-bold uppercase tracking-wider">OFFICIAL RECEIPTS AUDIT</span>
+            </div>
+            <h1 className="text-xl font-bold text-slate-800 mt-2">Duesly Receipts Registry</h1>
+            <p className="text-xs text-slate-500">All issued receipt logs for your association</p>
+          </div>
+          <div className="text-right text-xs text-slate-500 leading-relaxed">
+            <p><strong>Total Receipts:</strong> {receiptsList.length}</p>
+            <p><strong>Export Date:</strong> {new Date().toLocaleDateString("en-NG")}</p>
+            <p><strong>Status:</strong> Reconciled</p>
+          </div>
+        </div>
+
+        <table className="w-full text-xs text-left border-collapse">
+          <thead>
+            <tr className="border-b-2 border-slate-900 text-slate-700 font-bold uppercase">
+              <th className="py-2.5">Receipt #</th>
+              <th className="py-2.5">Member Name</th>
+              <th className="py-2.5">Levy Category</th>
+              <th className="py-2.5 text-right font-mono">Amount Reconciled</th>
+              <th className="py-2.5">Date Paid</th>
+              <th className="py-2.5">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {printableReceipts.map((r) => (
+              <tr key={r.id} className="border-b border-slate-200 text-slate-800">
+                <td className="py-2.5 font-mono text-[10px]">{r.id}</td>
+                <td className="py-2.5 font-semibold">{r.vendor}</td>
+                <td className="py-2.5">{r.category}</td>
+                <td className="py-2.5 text-right font-mono font-semibold">₦{Number(r.amount).toLocaleString("en-NG")}</td>
+                <td className="py-2.5 text-slate-500">{r.date}</td>
+                <td className="py-2.5 font-bold uppercase text-[9px] text-emerald">{r.status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="mt-8 border-t pt-4 flex justify-between items-center text-[10px] text-slate-500">
+          <p>Duesly Platforms Ltd · Verification Node Gateway</p>
+          <p>Page 1 of 1</p>
+        </div>
+      </div>
     </OrgShell>
   );
 }

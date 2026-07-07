@@ -21,36 +21,25 @@ function Page() {
   const { stats, organizations, trend } = Route.useLoaderData();
   const isTrendEmpty = (trend || []).every(t => t.collected === 0);
 
-  const handleExport = () => {
+  const [printableOrgs, setPrintableOrgs] = useState<any[]>([]);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportPDF = () => {
     if (organizations.length === 0) {
       toast.error("No organizations available to export.");
       return;
     }
-    const headers = ["Organization ID", "Name", "Type", "Status", "Vendors Count", "Total Collected (₦)"];
-    const csvRows = [headers.join(",")];
-    organizations.forEach(o => {
-      csvRows.push([
-        o.id,
-        `"${o.name}"`,
-        o.type,
-        o.status,
-        o.vendors,
-        o.collected
-      ].join(","));
-    });
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute("download", `duesly_organizations_report.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success("Platform organizations report downloaded!");
+    setExporting(true);
+    setPrintableOrgs(organizations);
+    setTimeout(() => {
+      window.print();
+      setExporting(false);
+    }, 400);
   };
 
   return (
     <SuperShell title="Platform Overview" subtitle="All organizations powered by Duesly"
-      actions={<Button variant="outline" onClick={handleExport} disabled={organizations.length === 0}><Download className="h-4 w-4" /> Export</Button>}
+      actions={<Button variant="outline" className="cursor-pointer" onClick={handleExportPDF} disabled={organizations.length === 0}><Download className="h-4 w-4" /> {exporting ? "Exporting..." : "Export"}</Button>}
     >
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Organizations" value={formatNumber(stats.totalOrgs)} delta="+3 this quarter" trend="up" accent="navy" icon={<Building2 className="h-5 w-5" />} />
@@ -136,6 +125,75 @@ function Page() {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Hidden Printable PDF Section */}
+      <div id="printable-ledger" className="hidden">
+        <style>{`
+          @media print {
+            body * {
+              visibility: hidden;
+            }
+            #printable-ledger, #printable-ledger * {
+              visibility: visible;
+            }
+            #printable-ledger {
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: 100%;
+              background: white !important;
+              color: black !important;
+              font-family: sans-serif;
+              padding: 24px;
+            }
+          }
+        `}</style>
+        <div className="flex justify-between items-center border-b pb-6 mb-6">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-2xl tracking-tight text-slate-900">duesly</span>
+              <span className="text-[10px] border border-slate-900 px-2 py-0.5 rounded font-bold uppercase tracking-wider">PLATFORM DIRECTORY</span>
+            </div>
+            <h1 className="text-xl font-bold text-slate-800 mt-2">Duesly Admin Portal</h1>
+            <p className="text-xs text-slate-500">Active Tenant Associations Registry</p>
+          </div>
+          <div className="text-right text-xs text-slate-500 leading-relaxed">
+            <p><strong>Total Accounts:</strong> {organizations.length}</p>
+            <p><strong>Generated Date:</strong> {new Date().toLocaleDateString("en-NG")}</p>
+            <p><strong>System Status:</strong> Operational</p>
+          </div>
+        </div>
+
+        <table className="w-full text-xs text-left border-collapse">
+          <thead>
+            <tr className="border-b-2 border-slate-900 text-slate-700 font-bold uppercase">
+              <th className="py-2.5">Org ID</th>
+              <th className="py-2.5">Association Name</th>
+              <th className="py-2.5">Sector Type</th>
+              <th className="py-2.5 text-right font-mono">Members Count</th>
+              <th className="py-2.5 text-right font-mono">Lifetime Collections</th>
+              <th className="py-2.5">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {printableOrgs.map((o) => (
+              <tr key={o.id} className="border-b border-slate-200 text-slate-800">
+                <td className="py-2.5 font-mono text-[10px]">{o.id}</td>
+                <td className="py-2.5 font-semibold">{o.name}</td>
+                <td className="py-2.5">{o.type}</td>
+                <td className="py-2.5 text-right font-mono">{formatNumber(o.vendors)}</td>
+                <td className="py-2.5 text-right font-mono font-semibold">₦{Number(o.collected).toLocaleString("en-NG")}</td>
+                <td className="py-2.5 font-bold uppercase text-[9px]">{o.status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="mt-8 border-t pt-4 flex justify-between items-center text-[10px] text-slate-500">
+          <p>Duesly Platforms Inc · Central Core System Diagnostics</p>
+          <p>Page 1 of 1</p>
         </div>
       </div>
     </SuperShell>

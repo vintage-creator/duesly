@@ -5,10 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatNaira, monthlyTrend } from "@/lib/sample-data";
 import { StatusBadge } from "@/components/duesly/status-badge";
-import { Download, FileDown, BarChart3 } from "lucide-react";
+import { Download, FileDown, BarChart3, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { getDashboardData, getVendors } from "@/lib/db-actions";
 import { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/dashboard/reports")({
   loader: async () => {
@@ -55,44 +58,32 @@ function Page() {
     ? Math.round((statsData.paid / statsData.totalVendors) * 100) 
     : 0;
 
-  const handleCSVExport = () => {
-    if (vendorsList.length === 0) {
-      toast.error("No vendor metrics available to export.");
-      return;
-    }
-    const headers = ["Vendor Name", "Shop/Coordinate", "Phone Number", "Section", "Account Number", "Levy Due (₦)", "Amount Paid (₦)", "Status"];
-    const csvRows = [headers.join(",")];
-    vendorsList.forEach(v => {
-      csvRows.push([
-        `"${v.name}"`,
-        `"${v.shop}"`,
-        v.phone,
-        v.section,
-        v.virtualAccount || (v as any).account || "N/A",
-        v.due,
-        v.paid,
-        v.status
-      ].join(","));
-    });
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute("download", `duesly_vendors_compliance_report.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success("CSV registry compliance report downloaded!");
-  };
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [selectedSection, setSelectedSection] = useState("all");
+  const [exporting, setExporting] = useState(false);
+  const [printableVendors, setPrintableVendors] = useState<any[]>([]);
 
-  const handlePDFPrint = () => {
-    if (vendorsList.length === 0) {
-      toast.error("No metrics data available to print.");
+  const handleExportPDFSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setExporting(true);
+
+    const filtered = selectedSection === "all"
+      ? vendorsList
+      : vendorsList.filter((v: any) => v.section === selectedSection);
+
+    if (filtered.length === 0) {
+      toast.error("No member metrics found matching the selected section.");
+      setExporting(false);
       return;
     }
-    toast.success("Opening print system...");
+
+    setPrintableVendors(filtered);
+
     setTimeout(() => {
       window.print();
-    }, 500);
+      setExporting(false);
+      setExportDialogOpen(false);
+    }, 400);
   };
 
   if (vendorsList.length === 0) {
@@ -120,10 +111,9 @@ function Page() {
     <OrgShell title="Reports" subtitle="Collection insights, compliance and exports."
       actions={
         <>
-          <Input type="date" defaultValue="2026-06-01" className="w-40" />
-          <Input type="date" defaultValue="2026-06-30" className="w-40" />
-          <Button variant="outline" onClick={handleCSVExport} disabled={vendorsList.length === 0}><FileDown className="h-4 w-4" /> CSV</Button>
-          <Button variant="hero" onClick={handlePDFPrint} disabled={vendorsList.length === 0}><Download className="h-4 w-4" /> PDF</Button>
+          <Input type="date" defaultValue="2026-06-01" className="w-40 bg-transparent border-border focus:ring-emerald hidden sm:block" />
+          <Input type="date" defaultValue="2026-06-30" className="w-40 bg-transparent border-border focus:ring-emerald hidden sm:block" />
+          <Button variant="hero" className="cursor-pointer" onClick={() => setExportDialogOpen(true)} disabled={vendorsList.length === 0}><Download className="h-4 w-4" /> Export PDF</Button>
         </>
       }
     >
@@ -215,6 +205,114 @@ function Page() {
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      {/* Export Reports Dialog */}
+      <Dialog open={exportDialogOpen} onOpenChange={(o) => !o && setExportDialogOpen(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display font-bold text-navy text-lg">Export Compliance Report</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleExportPDFSubmit} className="space-y-4 py-2">
+            <div>
+              <Label htmlFor="export-section">Filter by Section</Label>
+              <div className="mt-1.5">
+                <Select value={selectedSection} onValueChange={setSelectedSection}>
+                  <SelectTrigger id="export-section" className="w-full bg-transparent border-border focus:ring-emerald cursor-pointer">
+                    <SelectValue placeholder="Select section..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="cursor-pointer">All Sections</SelectItem>
+                    <SelectItem value="Textile Line" className="cursor-pointer">Textile Line</SelectItem>
+                    <SelectItem value="Provisions" className="cursor-pointer">Provisions</SelectItem>
+                    <SelectItem value="Electronics" className="cursor-pointer">Electronics</SelectItem>
+                    <SelectItem value="Cosmetics" className="cursor-pointer">Cosmetics</SelectItem>
+                    <SelectItem value="Grains" className="cursor-pointer">Grains</SelectItem>
+                    <SelectItem value="Hardware" className="cursor-pointer">Hardware</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">Select a specific branch or zone section to scope compliance report details.</p>
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="ghost" onClick={() => setExportDialogOpen(false)}>Cancel</Button>
+              <Button type="submit" variant="hero" disabled={exporting} className="cursor-pointer">
+                <Download className="mr-2 h-4 w-4" /> {exporting ? "Compiling PDF..." : "Export PDF"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hidden Printable PDF Section */}
+      <div id="printable-ledger" className="hidden">
+        <style>{`
+          @media print {
+            body * {
+              visibility: hidden;
+            }
+            #printable-ledger, #printable-ledger * {
+              visibility: visible;
+            }
+            #printable-ledger {
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: 100%;
+              background: white !important;
+              color: black !important;
+              font-family: sans-serif;
+              padding: 24px;
+            }
+          }
+        `}</style>
+        <div className="flex justify-between items-center border-b pb-6 mb-6">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-2xl tracking-tight text-slate-900">duesly</span>
+              <span className="text-[10px] border border-slate-900 px-2 py-0.5 rounded font-bold uppercase tracking-wider">MEMBER COMPLIANCE REPORT</span>
+            </div>
+            <h1 className="text-xl font-bold text-slate-800 mt-2">Duesly Reports Portal</h1>
+            <p className="text-xs text-slate-500">Vendor collection compliance & levy audits</p>
+          </div>
+          <div className="text-right text-xs text-slate-500 leading-relaxed">
+            <p><strong>Report Scope:</strong> {selectedSection === "all" ? "All Sections" : `Section: ${selectedSection}`}</p>
+            <p><strong>Run Date:</strong> {new Date().toLocaleDateString("en-NG")}</p>
+            <p><strong>Status:</strong> Active</p>
+          </div>
+        </div>
+
+        <table className="w-full text-xs text-left border-collapse">
+          <thead>
+            <tr className="border-b-2 border-slate-900 text-slate-700 font-bold uppercase">
+              <th className="py-2.5">Member Name</th>
+              <th className="py-2.5">Shop / Coord</th>
+              <th className="py-2.5">Section</th>
+              <th className="py-2.5">Virtual Account</th>
+              <th className="py-2.5 text-right">Levy Due</th>
+              <th className="py-2.5 text-right">Paid</th>
+              <th className="py-2.5">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {printableVendors.map((v) => (
+              <tr key={v.id} className="border-b border-slate-200 text-slate-800">
+                <td className="py-2.5 font-semibold">{v.name}</td>
+                <td className="py-2.5">{v.shop}</td>
+                <td className="py-2.5">{v.section}</td>
+                <td className="py-2.5 font-mono text-[10px]">{v.virtualAccount || "N/A"}</td>
+                <td className="py-2.5 text-right font-mono">₦{Number(v.due).toLocaleString("en-NG")}</td>
+                <td className="py-2.5 text-right font-mono font-semibold">₦{Number(v.paid).toLocaleString("en-NG")}</td>
+                <td className="py-2.5 font-bold uppercase text-[9px]">{v.status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="mt-8 border-t pt-4 flex justify-between items-center text-[10px] text-slate-500">
+          <p>Duesly Platforms Ltd · Compliance Operations</p>
+          <p>Page 1 of 1</p>
         </div>
       </div>
     </OrgShell>
