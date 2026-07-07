@@ -6,7 +6,10 @@ import { StatusBadge } from "@/components/duesly/status-badge";
 import { formatNaira } from "@/lib/sample-data";
 import { ArrowDownLeft, ArrowUpRight, AlertTriangle, Check, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { getReconciliations, resolveReconciliation, sendReconciliationReminder, resendReconciliationReceipt } from "@/lib/db-actions";
+import { getReconciliations, resolveReconciliation, sendReconciliationReminder, resendReconciliationReceipt, getVendors } from "@/lib/db-actions";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/dashboard/payments")({
   loader: async () => {
@@ -41,22 +44,52 @@ function Page() {
   const under = reconciliationList.filter((r) => r.status === "underpaid").length;
   const review = reconciliationList.filter((r) => r.status === "review").length;
 
-  const handleManualMatch = async (id: string) => {
-    const vendorName = window.prompt("Enter the exact Vendor Name to match this payment to (e.g. Chinedu Okafor, Aisha Bello, Emeka Nwosu):");
-    if (!vendorName) return;
+  const [vendorsList, setVendorsList] = useState<any[]>([]);
+  const [matchingItem, setMatchingItem] = useState<any | null>(null);
+  const [matchVendorId, setMatchVendorId] = useState("");
+  const [submittingMatch, setSubmittingMatch] = useState(false);
 
+  useEffect(() => {
+    getVendors({ data: { orgId: activeOrgId } })
+      .then(setVendorsList)
+      .catch(console.error);
+  }, [activeOrgId]);
+
+  const handleManualMatch = (item: any) => {
+    setMatchingItem(item);
+  };
+
+  const handleManualMatchSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!matchingItem || !matchVendorId) return;
+
+    const selectedVendor = vendorsList.find(v => v.id === matchVendorId);
+    if (!selectedVendor) return;
+
+    setSubmittingMatch(true);
     try {
-      const res = await resolveReconciliation({ data: { id, action: "matched", vendorName, orgId: activeOrgId } });
+      const res = await resolveReconciliation({
+        data: {
+          id: matchingItem.id,
+          action: "matched",
+          vendorName: selectedVendor.name,
+          orgId: activeOrgId
+        }
+      });
       if (res.success) {
-        toast.success(`Payment matched successfully to ${vendorName}!`);
+        toast.success(`Payment matched successfully to ${selectedVendor.name}!`);
+        setMatchingItem(null);
+        setMatchVendorId("");
         getReconciliations({ data: { orgId: activeOrgId } }).then(setReconciliationList).catch(console.error);
         router.invalidate();
       } else {
-        toast.error("Could not find a vendor with that name.");
+        toast.error("Failed to match payment.");
       }
     } catch (err) {
       console.error(err);
       toast.error("Error matching payment.");
+    } finally {
+      setSubmittingMatch(false);
     }
   };
 
@@ -157,7 +190,7 @@ function Page() {
                   <td className="px-5 py-3"><StatusBadge status={r.status} /></td>
                   <td className="px-5 py-3 text-right">
                     {r.status === "review" ? (
-                      <Button size="sm" variant="navy" onClick={() => handleManualMatch(r.id)}>Match</Button>
+                      <Button size="sm" variant="navy" className="cursor-pointer" onClick={() => handleManualMatch(r)}>Match</Button>
                     ) : r.status === "overpaid" ? (
                       <Button size="sm" variant="outline" onClick={() => handleApplyCredit(r.id)}>Apply credit</Button>
                     ) : r.status === "underpaid" ? (
@@ -195,6 +228,46 @@ function Page() {
           </table>
         </div>
       </div>
+
+      {/* Manual Match Dialog */}
+      <Dialog open={!!matchingItem} onOpenChange={(o) => !o && setMatchingItem(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display font-bold text-navy text-lg">Manual Payment Matching</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleManualMatchSubmit} className="space-y-4 py-2">
+            <div className="rounded-xl border border-info/20 bg-info/5 p-3 text-xs text-[color:var(--info-foreground)] space-y-1">
+              <p><strong>Unreconciled Inflow Details:</strong></p>
+              <p>· Reference: <span className="font-mono">{matchingItem?.id}</span></p>
+              <p>· Source Bank Account: <span className="font-mono">{matchingItem?.source}</span></p>
+              <p>· Amount Deposited: <span className="font-bold text-emerald">{matchingItem ? formatNaira(matchingItem.paid) : "—"}</span></p>
+            </div>
+            <div>
+              <Label htmlFor="match-vendor">Select Member to Associate Payment</Label>
+              <div className="mt-1">
+                <Select value={matchVendorId} onValueChange={setMatchVendorId}>
+                  <SelectTrigger id="match-vendor" className="w-full bg-transparent border-border focus:ring-emerald cursor-pointer">
+                    <SelectValue placeholder="Select vendor name..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-56 overflow-y-auto">
+                    {vendorsList.map((v) => (
+                      <SelectItem key={v.id} value={v.id} className="cursor-pointer">
+                        {v.name} (Shop {v.shop} · {v.section})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="ghost" onClick={() => setMatchingItem(null)}>Cancel</Button>
+              <Button type="submit" variant="hero" disabled={submittingMatch || !matchVendorId} className="cursor-pointer">
+                {submittingMatch ? "Matching..." : "Confirm Match"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </OrgShell>
   );
 }
