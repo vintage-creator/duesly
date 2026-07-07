@@ -230,6 +230,8 @@ async function main() {
     const users = [
       { email: "canipf.ng@gmail.com", password: "Duesly7817##**", role: "super-admin", org_id: null, name: "Chukwudi Admin" },
       { email: "admin@ariaria.org", password: "password", role: "admin", org_id: "ORG-001", name: "Ariaria Admin" },
+      { email: "admin@lekkiestate.org", password: "password", role: "admin", org_id: "ORG-002", name: "Lekki Admin" },
+      { email: "admin@transamadi.org", password: "password", role: "admin", org_id: "ORG-004", name: "Trans-Amadi Admin" },
     ];
 
     for (const u of users) {

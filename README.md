@@ -8,11 +8,14 @@ Duesly is a premium, secure levy collection and automated reconciliation platfor
 
 *   **Dedicated Payment Accounts**: Automatic assignment of unique payment coordinates to members (assigned bank accounts for instant bank transfer tracking).
 *   **Gated Multi-Tenant Dashboards**:
-    *   **Super Admin**: Platform-wide controls, tenant onboarding, and comparative collections reports.
-    *   **Organization Admin**: Manage vendor lists, generate levy bills, view compliance rates, and export CSV/PDF reports.
-    *   **Member/Vendor Portal**: Instant search lookups, real-time receipt downloads, and simple credential onboarding.
+    *   **Super Admin**: Platform-wide controls, tenant onboarding, comparative reports, profit wallet details, and payout logs.
+    *   **Organization Admin**: Manage member lists, generate levy bills, view compliance rates, and export CSV/PDF reports.
+    *   **Member/Vendor Portal**: Instant search lookups, real-time receipt downloads, secure credential onboarding, and withdrawal requests.
 *   **Aesthetic & Responsive Layout**: Styled with custom emerald and deep navy color palettes, modern typography, glassmorphism, and smooth micro-animations.
-*   **AI Coach & Collection strategist**: Embedded AI-powered assistant providing automated levy collection optimization tips.
+*   **Unified Security & Payout Controls**: Gated payouts protected by a **4-digit transaction PIN**, **₦100,000 single request cap**, and a **₦250,000 daily limit**. Includes a non-dismissible blocker modal prompting new users to configure their transaction PIN.
+*   **Flat Platform Transaction Fees**: Centralized profit accumulation crediting ₦100 flat per transaction to the Super Admin wallet, with support for saved withdrawal details.
+*   **Full Administrative Auditing**: Detailed audit logging of configurations, admin approvals, onboarding, and withdrawal logs.
+*   **AI Coach & Collection Strategist**: Embedded AI-powered assistant providing automated levy collection optimization tips.
 *   **Installable PWA**: Configured with vector logo manifests, icons, and service worker caching for standard mobile installation support.
 *   **Graceful Empty States**: Built-in visual placeholders for all charts and reports when no transaction data exists.
 
@@ -64,8 +67,18 @@ npm run build
 
 ## Demo Login Accounts
 
-*   **Organization Admin (Ariaria Market Association)**:
-    *   *Email*: `admin@ariaria.org`
-    *   *Password*: `password`
-*   **Vendor Portal Lookup Search**:
+*   **Super Admin (Platform-wide Owner)**:
+    *   *Email*: `canipf.ng@gmail.com`
+    *   *Password*: `Duesly7817##**`
+*   **Organization Admins (Dynamic layout & terminology shifts)**:
+    *   **Market Admin (Ariaria Market Association)**:
+        *   *Email*: `admin@ariaria.org`
+        *   *Password*: `password`
+    *   **Estate Admin (Lekki Phase 1 Estate)**:
+        *   *Email*: `admin@lekkiestate.org`
+        *   *Password*: `password`
+    *   **Cooperative Admin (Trans-Amadi Cooperative)**:
+        *   *Email*: `admin@transamadi.org`
+        *   *Password*: `password`
+*   **Member/Vendor Portal Lookup Search**:
     *   *Search Term*: `Aisha Bello` or `+234 811 220 0098`
