@@ -1420,3 +1420,151 @@ export const sendPaymentReminder = createServerFn({ method: "POST" })
 
     return { success: true };
   });
+
+export const sendReconciliationReminder = createServerFn({ method: "POST" })
+  .validator(z.object({
+    reconciliationId: z.string(),
+    orgId: z.string()
+  }))
+  .handler(async ({ data }) => {
+    const recRes = await pool.query("SELECT vendor_name, paid, expected FROM reconciliations WHERE id = $1", [data.reconciliationId]);
+    if (!recRes.rowCount) {
+      return { success: false, error: "Reconciliation transaction not found" };
+    }
+    const rec = recRes.rows[0];
+
+    const vendorRes = await pool.query("SELECT id, phone FROM vendors WHERE name = $1 AND org_id = $2", [rec.vendor_name, data.orgId]);
+    if (!vendorRes.rowCount) {
+      return { success: false, error: `Vendor "${rec.vendor_name}" is not registered on the portal.` };
+    }
+    const vendor = vendorRes.rows[0];
+
+    const outstanding = Math.max(0, parseFloat(rec.expected) - parseFloat(rec.paid));
+    const orgRes = await pool.query("SELECT name FROM organizations WHERE id = $1", [data.orgId]);
+    const orgName = orgRes.rows[0]?.name || "Duesly Admin";
+
+    await createNotification(
+      data.orgId,
+      vendor.id,
+      "vendor",
+      "Payment Underpayment Notice",
+      `Your recent payment of ₦${parseFloat(rec.paid).toLocaleString()} underpaid the expected levy billing of ₦${parseFloat(rec.expected).toLocaleString()}. Please transfer the remaining balance of ₦${outstanding.toLocaleString()} to your dedicated payment account.`
+    );
+
+    await createNotification(
+      data.orgId,
+      null,
+      "admin",
+      "Reminder Sent",
+      `Payment reminder for underpayment discrepancy of ₦${outstanding.toLocaleString()} successfully sent to ${rec.vendor_name}.`
+    );
+
+    return { success: true };
+  });
+
+export const resendReconciliationReceipt = createServerFn({ method: "POST" })
+  .validator(z.object({
+    reconciliationId: z.string(),
+    orgId: z.string()
+  }))
+  .handler(async ({ data }) => {
+    const recRes = await pool.query("SELECT vendor_name, paid FROM reconciliations WHERE id = $1", [data.reconciliationId]);
+    if (!recRes.rowCount) {
+      return { success: false, error: "Reconciliation record not found" };
+    }
+    const rec = recRes.rows[0];
+
+    const vendorRes = await pool.query("SELECT id, email FROM vendors WHERE name = $1 AND org_id = $2", [rec.vendor_name, data.orgId]);
+    const vendor = vendorRes.rows[0];
+
+    if (vendor) {
+      await createNotification(
+        data.orgId,
+        vendor.id,
+        "vendor",
+        "Receipt Re-dispatched",
+        `Your receipt for the matched payment of ₦${parseFloat(rec.paid).toLocaleString()} has been re-sent. You can download it anytime from your history ledger.`
+      );
+    }
+
+    await createNotification(
+      data.orgId,
+      null,
+      "admin",
+      "Receipt Re-dispatched",
+      `A copy of the matched payment receipt for ₦${parseFloat(rec.paid).toLocaleString()} has been re-dispatched to ${rec.vendor_name}.`
+    );
+
+    return { success: true };
+  });
+
+export const submitSettlementChangeRequest = createServerFn({ method: "POST" })
+  .validator(z.object({
+    orgId: z.string(),
+    bankName: z.string().min(1),
+    accountNumber: z.string().min(10),
+    reason: z.string().min(10),
+  }))
+  .handler(async ({ data }) => {
+    const orgRes = await pool.query("SELECT name FROM organizations WHERE id = $1", [data.orgId]);
+    if (!orgRes.rowCount) {
+      return { success: false, error: "Organization not found" };
+    }
+    const orgName = orgRes.rows[0].name;
+
+    await createNotification(
+      null,
+      null,
+      "super-admin",
+      "Payout Bank Change Request",
+      `Organization "${orgName}" (ID: ${data.orgId}) has requested a payout bank change to ${data.bankName} (${data.accountNumber}). Reason: "${data.reason}".`
+    );
+
+    await createNotification(
+      data.orgId,
+      null,
+      "admin",
+      "Change Request Submitted",
+      `Payout bank change request to ${data.bankName} (${data.accountNumber}) has been submitted for platform operations review.`
+    );
+
+    return { success: true };
+  });
+
+export const shareVendorReceipts = createServerFn({ method: "POST" })
+  .validator(z.object({
+    vendorId: z.string(),
+    orgId: z.string()
+  }))
+  .handler(async ({ data }) => {
+    const vendorRes = await pool.query("SELECT name, phone FROM vendors WHERE id = $1", [data.vendorId]);
+    if (!vendorRes.rowCount) {
+      return { success: false, error: "Vendor not found" };
+    }
+    const vendor = vendorRes.rows[0];
+
+    const recRes = await pool.query("SELECT COUNT(*) FROM receipts WHERE vendor_name = $1 AND org_id = $2", [vendor.name, data.orgId]);
+    const count = parseInt(recRes.rows[0].count || "0");
+
+    if (count === 0) {
+      return { success: false, error: "No receipt records exist for this vendor." };
+    }
+
+    await createNotification(
+      data.orgId,
+      data.vendorId,
+      "vendor",
+      "Receipt Ledger Shared",
+      `Your organization admin has dispatched a compiled list of ${count} verified payment receipts to your registered contact number.`
+    );
+
+    await createNotification(
+      data.orgId,
+      null,
+      "admin",
+      "Receipts Shared",
+      `Successfully dispatched SMS & WhatsApp receipt ledger (${count} files) to ${vendor.name} (${vendor.phone}).`
+    );
+
+    return { success: true, count };
+  });

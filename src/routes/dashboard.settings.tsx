@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { getDashboardData, updateUserProfile, updateOrganization } from "@/lib/db-actions";
+import { getDashboardData, updateUserProfile, updateOrganization, submitSettlementChangeRequest } from "@/lib/db-actions";
 import { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/dashboard/settings")({
   loader: async () => {
@@ -25,6 +26,42 @@ function Page() {
   const [currentOrgName, setCurrentOrgName] = useState(orgName);
   const [currentOrgType, setCurrentOrgType] = useState(orgName.includes("Market") ? "Market" : orgName.includes("Estate") ? "Estate" : "Cooperative");
   const [loading, setLoading] = useState(false);
+
+  const [bankDialogOpen, setBankDialogOpen] = useState(false);
+  const [bankName, setBankName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [changeReason, setChangeReason] = useState("");
+  const [submittingChange, setSubmittingChange] = useState(false);
+
+  const handleBankChangeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const orgId = user?.org_id || "ORG-001";
+    setSubmittingChange(true);
+    try {
+      const res = await submitSettlementChangeRequest({
+        data: {
+          orgId,
+          bankName,
+          accountNumber,
+          reason: changeReason
+        }
+      });
+      if (res.success) {
+        toast.success("Modification request submitted for Super-Admin review!");
+        setBankDialogOpen(false);
+        setBankName("");
+        setAccountNumber("");
+        setChangeReason("");
+      } else {
+        toast.error(res.error || "Failed to submit request");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error submitting payout change request");
+    } finally {
+      setSubmittingChange(false);
+    }
+  };
 
   useEffect(() => {
     const localUser = localStorage.getItem("user");
@@ -152,11 +189,52 @@ function Page() {
           <div className="rounded-2xl border bg-card p-5 shadow-soft">
             <h3 className="font-display text-lg font-bold text-navy">Bank settlement</h3>
             <p className="mt-1 text-xs text-muted-foreground">Settlement Wallet · 0123456789 · {orgName}</p>
-            <Button variant="soft" size="sm" className="mt-3" type="button" onClick={() => toast.success("Settlement bank modification form opened")}>Change account</Button>
+            <Button variant="soft" size="sm" className="mt-3 cursor-pointer" type="button" onClick={() => setBankDialogOpen(true)}>Change account</Button>
             <div className="mt-4 border-t pt-3 flex items-start gap-1.5 text-[10px] text-muted-foreground leading-relaxed">
               <span className="font-bold text-emerald flex items-center gap-0.5 min-w-[100px]">🛡️ Anti-Fraud Lock:</span>
               <span>Direct administrative withdrawals are restricted. Funds can only be routed to pre-authorized settlement bank accounts.</span>
             </div>
+
+            <Dialog open={bankDialogOpen} onOpenChange={setBankDialogOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="font-display font-bold text-navy text-lg">Request Payout Account Change</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleBankChangeSubmit} className="space-y-4 py-2">
+                  <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive flex items-start gap-2">
+                    <span className="font-bold">Security Lock:</span>
+                    <span>For security and anti-fraud purposes, all settlement account modifications require review and validation by Duesly operations trustees.</span>
+                  </div>
+                  <div>
+                    <Label htmlFor="bank-name">New Bank Name</Label>
+                    <Input id="bank-name" required value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. Wema Bank, Zenith Bank" className="mt-1" />
+                  </div>
+                  <div>
+                    <Label htmlFor="account-num">New Account Number</Label>
+                    <Input id="account-num" required maxLength={10} minLength={10} value={accountNumber} onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, ""))} placeholder="10-digit NUBAN" className="mt-1" />
+                  </div>
+                  <div>
+                    <Label htmlFor="change-reason">Reason for Change</Label>
+                    <textarea 
+                      id="change-reason" 
+                      required 
+                      minLength={10}
+                      rows={3}
+                      value={changeReason} 
+                      onChange={(e) => setChangeReason(e.target.value)} 
+                      placeholder="Please explain the reason for updating the authorized payout account..." 
+                      className="mt-1 flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                  </div>
+                  <DialogFooter className="pt-2">
+                    <Button type="button" variant="ghost" onClick={() => setBankDialogOpen(false)}>Cancel</Button>
+                    <Button type="submit" variant="hero" disabled={submittingChange}>
+                      {submittingChange ? "Submitting Request..." : "Submit for Verification"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </div>

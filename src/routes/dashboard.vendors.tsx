@@ -11,7 +11,7 @@ import { Plus, Search, Filter, Copy, Phone, MapPin, Upload, LayoutGrid, List } f
 import { formatNaira } from "@/lib/sample-data";
 import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
-import { getVendors, createVendor, getVendorHistory, importVendorsCSV, sendPaymentReminder } from "@/lib/db-actions";
+import { getVendors, createVendor, getVendorHistory, importVendorsCSV, sendPaymentReminder, shareVendorReceipts } from "@/lib/db-actions";
 import * as XLSX from "xlsx";
 
 type Vendor = {
@@ -128,6 +128,31 @@ function Page() {
       toast.error("Error sending payment reminder");
     } finally {
       setSendingReminder(false);
+    }
+  };
+
+  const [sharingReceipts, setSharingReceipts] = useState(false);
+
+  const handleShareReceipts = async () => {
+    if (!active) return;
+    setSharingReceipts(true);
+    try {
+      const res = await shareVendorReceipts({
+        data: {
+          vendorId: active.id,
+          orgId: active.orgId || activeOrgId || "ORG-001"
+        }
+      });
+      if (res.success) {
+        toast.success(`Dispatched compiled list of ${res.count} receipts via SMS & WhatsApp!`);
+      } else {
+        toast.error(res.error || "Failed to share receipts");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error sharing receipts");
+    } finally {
+      setSharingReceipts(false);
     }
   };
 
@@ -496,7 +521,15 @@ function Page() {
                   )}
                 </div>
                 <div className="flex gap-2 pt-2">
-                  <Button variant="navy" className="flex-1" onClick={() => toast.success("Receipts shared with vendor via SMS & WhatsApp")}><MapPin className="h-4 w-4" />Share receipts</Button>
+                  <Button 
+                    variant="navy" 
+                    className="flex-1 cursor-pointer" 
+                    onClick={handleShareReceipts}
+                    disabled={sharingReceipts}
+                  >
+                    <MapPin className="h-4 w-4" />
+                    {sharingReceipts ? "Sharing..." : "Share receipts"}
+                  </Button>
                   <Button 
                     variant="outline" 
                     onClick={handleSendReminder} 

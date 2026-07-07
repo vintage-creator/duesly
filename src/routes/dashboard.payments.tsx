@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/duesly/status-badge";
 import { formatNaira } from "@/lib/sample-data";
 import { ArrowDownLeft, ArrowUpRight, AlertTriangle, Check, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { getReconciliations, resolveReconciliation } from "@/lib/db-actions";
+import { getReconciliations, resolveReconciliation, sendReconciliationReminder, resendReconciliationReceipt } from "@/lib/db-actions";
 
 export const Route = createFileRoute("/dashboard/payments")({
   loader: async () => {
@@ -74,6 +74,45 @@ function Page() {
     }
   };
 
+  const [loadingReminder, setLoadingReminder] = useState<string | null>(null);
+  const [loadingReceipt, setLoadingReceipt] = useState<string | null>(null);
+
+  const handleSendReminder = async (id: string) => {
+    setLoadingReminder(id);
+    try {
+      const res = await sendReconciliationReminder({ data: { reconciliationId: id, orgId: activeOrgId } });
+      if (res.success) {
+        toast.success("Payment reminder sent successfully!");
+        router.invalidate();
+      } else {
+        toast.error(res.error || "Failed to send reminder");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error sending payment reminder.");
+    } finally {
+      setLoadingReminder(null);
+    }
+  };
+
+  const handleResendReceipt = async (id: string) => {
+    setLoadingReceipt(id);
+    try {
+      const res = await resendReconciliationReceipt({ data: { reconciliationId: id, orgId: activeOrgId } });
+      if (res.success) {
+        toast.success("Receipt successfully re-dispatched to vendor!");
+        router.invalidate();
+      } else {
+        toast.error(res.error || "Failed to resend receipt");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error resending receipt.");
+    } finally {
+      setLoadingReceipt(null);
+    }
+  };
+
   return (
     <OrgShell title="Payments & Reconciliation" subtitle="Every inflow, matched to the right vendor and category."
       actions={<Button variant="outline" onClick={() => { router.invalidate(); toast.success("Manual reconciliation refreshed"); }}><RefreshCw className="mr-2 h-4 w-4" /> Refresh feed</Button>}
@@ -122,9 +161,25 @@ function Page() {
                     ) : r.status === "overpaid" ? (
                       <Button size="sm" variant="outline" onClick={() => handleApplyCredit(r.id)}>Apply credit</Button>
                     ) : r.status === "underpaid" ? (
-                      <Button size="sm" variant="outline" onClick={() => toast.success(`Reminder sent to ${r.vendor}`)}>Remind</Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => handleSendReminder(r.id)}
+                        disabled={loadingReminder === r.id}
+                        className="cursor-pointer"
+                      >
+                        {loadingReminder === r.id ? "Sending..." : "Remind"}
+                      </Button>
                     ) : (
-                      <Button size="sm" variant="ghost" onClick={() => toast.success(`Receipt re-sent to ${r.vendor}`)}>Receipt</Button>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        onClick={() => handleResendReceipt(r.id)}
+                        disabled={loadingReceipt === r.id}
+                        className="cursor-pointer"
+                      >
+                        {loadingReceipt === r.id ? "Sending..." : "Receipt"}
+                      </Button>
                     )}
                   </td>
                 </tr>
