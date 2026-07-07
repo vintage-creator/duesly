@@ -6,45 +6,52 @@ export async function askGeminiCoach(prompt: string, fallbackAdvice: string): Pr
     return fallbackAdvice;
   }
 
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: prompt,
-                },
-              ],
-            },
-          ],
-        }),
+  const models = ["gemini-3-flash-preview", "gemini-2.5-flash"];
+
+  for (const model of models) {
+    try {
+      console.log(`Querying Gemini model: ${model}...`);
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: prompt,
+                  },
+                ],
+              },
+            ],
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.warn(`Gemini model ${model} call failed (Status ${response.status}):`, errText);
+        continue;
       }
-    );
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("Gemini API call failed:", errText);
-      return fallbackAdvice;
+      const data = await response.json();
+      const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      
+      if (generatedText) {
+        console.log(`Successfully generated content using model: ${model}`);
+        return generatedText.trim();
+      }
+    } catch (error) {
+      console.error(`Gemini API error for model ${model}:`, error);
+      continue;
     }
-
-    const data = await response.json();
-    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (generatedText) {
-      return generatedText.trim();
-    }
-    return fallbackAdvice;
-  } catch (error) {
-    console.error("Gemini API error:", error);
-    return fallbackAdvice;
   }
+
+  return fallbackAdvice;
 }
 
 export async function analyzeCollectionInsights(stats: {
