@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { DueslyLogo } from "@/components/duesly/logo";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/duesly/status-badge";
@@ -8,7 +9,7 @@ import { Copy, MessageCircle, Download, LogOut, Receipt, Search, Bell, Lock } fr
 import { formatNaira } from "@/lib/sample-data";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { getVendorPortal, completeVendorOnboarding } from "@/lib/db-actions";
+import { getVendorPortal, completeVendorOnboarding, getNotifications, markNotificationRead, clearAllNotifications } from "@/lib/db-actions";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/vendor-portal")({
@@ -59,6 +60,56 @@ function Page() {
   const [onboardPassword, setOnboardPassword] = useState("");
   const [submittingOnboard, setSubmittingOnboard] = useState(false);
   const [showOnboardPass, setShowOnboardPass] = useState(false);
+  const [activeNotis, setActiveNotis] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchNotis = () => {
+    if (vendor) {
+      getNotifications({
+        data: {
+          role: "vendor",
+          orgId: vendor.orgId,
+          vendorId: vendor.id
+        }
+      })
+      .then((res) => {
+        setActiveNotis(res || []);
+        setUnreadCount((res || []).filter((n: any) => !n.read).length);
+      })
+      .catch(console.error);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotis();
+  }, [vendor, notiOpen]);
+
+  const handleMarkRead = async (id: string) => {
+    try {
+      await markNotificationRead({ data: { id } });
+      fetchNotis();
+    } catch (err) {
+      console.error("Failed to mark read:", err);
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (vendor) {
+      try {
+        await clearAllNotifications({
+          data: {
+            role: "vendor",
+            orgId: vendor.orgId,
+            vendorId: vendor.id
+          }
+        });
+        toast.success("All alerts cleared!");
+        fetchNotis();
+      } catch (err) {
+        console.error("Failed to clear notifications:", err);
+      }
+    }
+  };
 
   // Auto-login member session from unified login screen
   useEffect(() => {
@@ -223,22 +274,46 @@ function Page() {
             <div className="relative">
               <Button variant="ghost" size="icon" className="relative cursor-pointer" onClick={() => setNotiOpen(!notiOpen)}>
                 <Bell className="h-4 w-4 text-navy" />
-                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive ring-2 ring-background animate-pulse" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive ring-2 ring-background animate-pulse" />
+                )}
               </Button>
               {notiOpen && (
                 <div className="absolute right-0 mt-2 w-72 rounded-2xl border border-border bg-card p-3 shadow-elevated z-50 text-left text-xs animate-fade-in-up">
                   <div className="flex items-center justify-between border-b pb-2 mb-2">
-                    <p className="font-bold text-navy">Admin Alerts & Broadcasts</p>
-                    <button className="text-[10px] text-emerald hover:underline font-semibold cursor-pointer" onClick={() => { toast.success("Marked all alerts as read"); setNotiOpen(false); }}>Mark read</button>
+                    <p className="font-bold text-navy">Member Alerts ({unreadCount} new)</p>
+                    {activeNotis.length > 0 && (
+                      <button 
+                        className="text-[10px] text-emerald hover:underline font-semibold cursor-pointer" 
+                        onClick={handleClearAll}
+                      >
+                        Clear all
+                      </button>
+                    )}
                   </div>
                   <div className="space-y-3 max-h-60 overflow-y-auto">
-                    {notificationsList.map(n => (
-                      <div key={n.id} className="border-b border-border/60 pb-2 last:border-0 last:pb-0">
-                        <p className="font-semibold text-navy text-[11px]">{n.title}</p>
+                    {activeNotis.map(n => (
+                      <div 
+                        key={n.id} 
+                        onClick={() => handleMarkRead(n.id)}
+                        className={cn(
+                          "border-b border-border/60 pb-2 last:border-0 last:pb-0 cursor-pointer p-2 rounded-xl transition-colors hover:bg-secondary/40",
+                          !n.read ? "bg-emerald/5 border-l-2 border-l-emerald pl-2.5" : ""
+                        )}
+                      >
+                        <p className="font-semibold text-navy text-[11px] flex items-center justify-between">
+                          {n.title}
+                          {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-emerald" />}
+                        </p>
                         <p className="text-muted-foreground text-[10px] mt-0.5 leading-relaxed">{n.message}</p>
-                        <p className="text-[8px] text-muted-foreground/60 mt-1">{n.date}</p>
+                        <p className="text-[8px] text-muted-foreground/60 mt-1">
+                          {new Date(n.created_at).toLocaleDateString()} · {new Date(n.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </p>
                       </div>
                     ))}
+                    {activeNotis.length === 0 && (
+                      <div className="text-center py-6 text-muted-foreground">No member alerts.</div>
+                    )}
                   </div>
                 </div>
               )}

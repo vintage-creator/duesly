@@ -9,6 +9,7 @@ import { DueslyLogo } from "./logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { getNotifications, markNotificationRead, clearAllNotifications } from "@/lib/db-actions";
 
 export interface NavItem {
   label: string;
@@ -33,19 +34,60 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
   const [notiOpen, setNotiOpen] = useState(false);
   const bottomNav = nav.slice(0, 5);
 
-  const adminNotifications = [
-    { id: "1", title: "Nomba Auto-Reconciliation", message: "Nomba auto-matched 12 bank transfers this morning.", time: "2h ago" },
-    { id: "2", title: "Compliance Warning", message: "3 vendors have levies overdue by more than 30 days.", time: "1d ago" },
-    { id: "3", title: "Setup Checklist", message: "Connect your payout account to automate weekly payouts.", time: "2d ago" }
-  ];
+  const [activeNotis, setActiveNotis] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  const superAdminNotifications = [
-    { id: "1", title: "Performance Milestone", message: "Weekly transaction volume has exceeded ₦12.4M across all organizations.", time: "4h ago" },
-    { id: "2", title: "Security audit", message: "Platform admin credentials were updated successfully.", time: "1d ago" },
-    { id: "3", title: "Nomba Gateway Status", message: "Nomba virtual account routing channels are fully operational.", time: "3d ago" }
-  ];
+  const fetchNotis = () => {
+    const localUser = localStorage.getItem("user");
+    if (localUser) {
+      const parsed = JSON.parse(localUser);
+      getNotifications({
+        data: {
+          role: parsed.role || role,
+          orgId: parsed.org_id,
+          vendorId: parsed.vendor_id
+        }
+      })
+      .then((res) => {
+        setActiveNotis(res || []);
+        setUnreadCount((res || []).filter((n: any) => !n.read).length);
+      })
+      .catch(console.error);
+    }
+  };
 
-  const activeNotis = role === "Super Admin" || role === "admin" ? superAdminNotifications : adminNotifications;
+  useEffect(() => {
+    fetchNotis();
+  }, [role, notiOpen]);
+
+  const handleMarkRead = async (id: string) => {
+    try {
+      await markNotificationRead({ data: { id } });
+      fetchNotis();
+    } catch (err) {
+      console.error("Failed to mark read:", err);
+    }
+  };
+
+  const handleClearAll = async () => {
+    const localUser = localStorage.getItem("user");
+    if (localUser) {
+      const parsed = JSON.parse(localUser);
+      try {
+        await clearAllNotifications({
+          data: {
+            role: parsed.role || role,
+            orgId: parsed.org_id,
+            vendorId: parsed.vendor_id
+          }
+        });
+        toast.success("All notifications cleared!");
+        fetchNotis();
+      } catch (err) {
+        console.error("Failed to clear notifications:", err);
+      }
+    }
+  };
 
   useEffect(() => {
     const val = localStorage.getItem("sidebar_collapsed") === "true";
@@ -174,30 +216,46 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
                   onClick={() => setNotiOpen(!notiOpen)}
                 >
                   <Bell className="h-5 w-5 text-navy" />
-                  <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive ring-2 ring-background animate-pulse" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive ring-2 ring-background animate-pulse" />
+                  )}
                 </Button>
                 {notiOpen && (
                   <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-border bg-card p-3 shadow-elevated z-50 text-left text-xs animate-fade-in-up">
                     <div className="flex items-center justify-between border-b border-border/60 pb-2 mb-2">
-                      <p className="font-bold text-navy">Platform Alerts</p>
-                      <button 
-                        className="text-[10px] text-emerald hover:underline font-semibold cursor-pointer" 
-                        onClick={() => { 
-                          toast.success("All notifications marked as read"); 
-                          setNotiOpen(false); 
-                        }}
-                      >
-                        Mark read
-                      </button>
+                      <p className="font-bold text-navy">Platform Alerts ({unreadCount} new)</p>
+                      {activeNotis.length > 0 && (
+                        <button 
+                          className="text-[10px] text-emerald hover:underline font-semibold cursor-pointer" 
+                          onClick={handleClearAll}
+                        >
+                          Clear all
+                        </button>
+                      )}
                     </div>
                     <div className="space-y-3 max-h-64 overflow-y-auto">
                       {activeNotis.map(n => (
-                        <div key={n.id} className="border-b border-border/60 pb-2 last:border-0 last:pb-0">
-                          <p className="font-semibold text-navy text-[11px]">{n.title}</p>
+                        <div 
+                          key={n.id} 
+                          onClick={() => handleMarkRead(n.id)}
+                          className={cn(
+                            "border-b border-border/60 pb-2 last:border-0 last:pb-0 cursor-pointer p-2 rounded-xl transition-colors hover:bg-secondary/40",
+                            !n.read ? "bg-emerald/5 border-l-2 border-l-emerald pl-2.5" : ""
+                          )}
+                        >
+                          <p className="font-semibold text-navy text-[11px] flex items-center justify-between">
+                            {n.title}
+                            {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-emerald" />}
+                          </p>
                           <p className="text-muted-foreground text-[10px] mt-0.5 leading-relaxed">{n.message}</p>
-                          <p className="text-[8px] text-muted-foreground/60 mt-1">{n.time}</p>
+                          <p className="text-[8px] text-muted-foreground/60 mt-1">
+                            {new Date(n.created_at).toLocaleDateString()} · {new Date(n.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </p>
                         </div>
                       ))}
+                      {activeNotis.length === 0 && (
+                        <div className="text-center py-6 text-muted-foreground">No platform alerts.</div>
+                      )}
                     </div>
                   </div>
                 )}

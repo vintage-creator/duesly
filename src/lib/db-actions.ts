@@ -241,6 +241,13 @@ export const generateBills = createServerFn({ method: "POST" })
           [newDue, status, vendor.id]
         );
       }
+      await createNotification(
+        activeOrgId,
+        null,
+        "admin",
+        "Levy Dues Generated",
+        `Sanitation, monthly levy, and security bills totaling ₦${additionalDue} successfully applied to all members.`
+      );
     }
 
     return { success: true, amountApplied: additionalDue };
@@ -488,6 +495,22 @@ export const createOrganization = createServerFn({ method: "POST" })
 
       await client.query("COMMIT;");
 
+      // 4. Create real platform notifications
+      await createNotification(
+        null,
+        null,
+        "super-admin",
+        "Organization Onboarded",
+        `Organization "${data.name}" was successfully registered on the platform.`
+      );
+      await createNotification(
+        id,
+        null,
+        "admin",
+        "Portal Activated",
+        `Welcome to the "${data.name}" portal! Assign dedicated bank accounts to start matching levies.`
+      );
+
       // 4. Send welcome credentials email to organization admin
       try {
         await sendEmail({
@@ -551,8 +574,19 @@ export const deleteOrganization = createServerFn({ method: "POST" })
     id: z.string()
   }))
   .handler(async ({ data }) => {
+    const orgRes = await pool.query("SELECT name FROM organizations WHERE id = $1", [data.id]);
+    const name = orgRes.rows[0]?.name || data.id;
+
     await pool.query("DELETE FROM users WHERE org_id = $1", [data.id]);
     await pool.query("DELETE FROM organizations WHERE id = $1", [data.id]);
+
+    await createNotification(
+      null,
+      null,
+      "super-admin",
+      "Tenant Decommissioned",
+      `Organization "${name}" (ID: ${data.id}) was decommissioned and removed from the platform.`
+    );
     return { success: true };
   });
 
@@ -1278,3 +1312,72 @@ export const subscribeToNewsletter = createServerFn({ method: "POST" })
 
     return { success: true };
   });
+
+// Notifications Database Actions
+export const getNotifications = createServerFn({ method: "POST" })
+  .validator(z.object({
+    role: z.string(),
+    orgId: z.string().optional().nullable(),
+    vendorId: z.string().optional().nullable(),
+  }))
+  .handler(async ({ data }) => {
+    const roleKey = data.role === "Super Admin" || data.role === "super-admin" ? "super-admin" : data.role;
+    let query = "SELECT * FROM notifications WHERE role = $1";
+    const params: any[] = [roleKey];
+
+    if (roleKey === "admin") {
+      query += " AND org_id = $2";
+      params.push(data.orgId);
+    } else if (roleKey === "vendor") {
+      query += " AND vendor_id = $2";
+      params.push(data.vendorId);
+    }
+
+    query += " ORDER BY created_at DESC";
+    const res = await pool.query(query, params);
+    return res.rows;
+  });
+
+export const markNotificationRead = createServerFn({ method: "POST" })
+  .validator(z.object({
+    id: z.string(),
+  }))
+  .handler(async ({ data }) => {
+    await pool.query("UPDATE notifications SET read = true WHERE id = $1", [data.id]);
+    return { success: true };
+  });
+
+export const clearAllNotifications = createServerFn({ method: "POST" })
+  .validator(z.object({
+    role: z.string(),
+    orgId: z.string().optional().nullable(),
+    vendorId: z.string().optional().nullable(),
+  }))
+  .handler(async ({ data }) => {
+    const roleKey = data.role === "Super Admin" || data.role === "super-admin" ? "super-admin" : data.role;
+    let query = "DELETE FROM notifications WHERE role = $1";
+    const params: any[] = [roleKey];
+
+    if (roleKey === "admin") {
+      query += " AND org_id = $2";
+      params.push(data.orgId);
+    } else if (roleKey === "vendor") {
+      query += " AND vendor_id = $2";
+      params.push(data.vendorId);
+    }
+
+    await pool.query(query, params);
+    return { success: true };
+  });
+
+export async function createNotification(orgId: string | null, vendorId: string | null, role: string, title: string, message: string) {
+  const id = "NT-" + Math.random().toString(36).substring(2, 9).toUpperCase();
+  try {
+    await pool.query(
+      "INSERT INTO notifications (id, org_id, vendor_id, role, title, message, read) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+      [id, orgId, vendorId, role, title, message, false]
+    );
+  } catch (err) {
+    console.error("Failed to create notification:", err);
+  }
+}

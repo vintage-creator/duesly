@@ -31,6 +31,7 @@ async function main() {
   const client = await pool.connect();
   try {
     console.log("Dropping tables if they exist...");
+    await client.query("DROP TABLE IF EXISTS notifications CASCADE;");
     await client.query("DROP TABLE IF EXISTS users CASCADE;");
     await client.query("DROP TABLE IF EXISTS receipts CASCADE;");
     await client.query("DROP TABLE IF EXISTS reconciliations CASCADE;");
@@ -123,6 +124,19 @@ async function main() {
         amount NUMERIC(12,2) NOT NULL,
         date VARCHAR(100) NOT NULL,
         status VARCHAR(50) NOT NULL
+      );
+    `);
+
+    await client.query(`
+      CREATE TABLE notifications (
+        id VARCHAR(50) PRIMARY KEY,
+        org_id VARCHAR(50) REFERENCES organizations(id) ON DELETE CASCADE,
+        vendor_id VARCHAR(50) REFERENCES vendors(id) ON DELETE CASCADE,
+        role VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        read BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
@@ -246,6 +260,31 @@ async function main() {
         `INSERT INTO receipts (id, org_id, vendor_name, category, amount, date, status) 
          VALUES ($1, $2, $3, $4, $5, $6, $7);`,
         [r.id, r.org_id, r.vendor_name, r.category, r.amount, r.date, r.status]
+      );
+    }
+
+    console.log("Seeding notifications...");
+    const notificationsSeed = [
+      // Super Admin alerts
+      { id: "NT-001", org_id: null, vendor_id: null, role: "super-admin", title: "Platform Launch Successful", message: "Welcome to Duesly Super-Admin Portal. Setup is fully complete.", read: false },
+      { id: "NT-002", org_id: "ORG-001", vendor_id: null, role: "super-admin", title: "Organization Onboarded", message: "Ariaria Market Association has been successfully configured.", read: false },
+      { id: "NT-003", org_id: null, vendor_id: null, role: "super-admin", title: "Performance Milestone", message: "Weekly transaction volume has exceeded ₦12.4M across all organizations.", read: true },
+
+      // Org Admin alerts
+      { id: "NT-004", org_id: "ORG-001", vendor_id: null, role: "admin", title: "Nomba Auto-Reconciliation", message: "Nomba successfully auto-matched 12 bank transfers this morning.", read: false },
+      { id: "NT-005", org_id: "ORG-001", vendor_id: null, role: "admin", title: "Dues Bill Generated", message: "Standard Sanitation Levy generated for all active vendors.", read: false },
+      { id: "NT-006", org_id: "ORG-001", vendor_id: null, role: "admin", title: "Compliance Warning", message: "3 vendors have levies overdue by more than 30 days.", read: true },
+
+      // Vendor alerts (Aisha Bello: V-1043)
+      { id: "NT-007", org_id: "ORG-001", vendor_id: "V-1043", role: "vendor", title: "Portal Secured", message: "Your member portal credentials have been configured successfully.", read: false },
+      { id: "NT-008", org_id: "ORG-001", vendor_id: "V-1043", role: "vendor", title: "Dedicated Account Assigned", message: "Wema Bank dedicated payment account assigned for standard levy deposits.", read: false },
+    ];
+
+    for (const n of notificationsSeed) {
+      await client.query(
+        `INSERT INTO notifications (id, org_id, vendor_id, role, title, message, read) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7);`,
+        [n.id, n.org_id, n.vendor_id, n.role, n.title, n.message, n.read]
       );
     }
 

@@ -8,6 +8,7 @@ async function cleanReset() {
 
     // Clean all transaction and ledger tables
     console.log("Truncating transaction data...");
+    await client.query("TRUNCATE TABLE notifications CASCADE;");
     await client.query("TRUNCATE TABLE receipts CASCADE;");
     await client.query("TRUNCATE TABLE reconciliations CASCADE;");
     await client.query("TRUNCATE TABLE payments CASCADE;");
@@ -22,6 +23,13 @@ async function cleanReset() {
       `INSERT INTO users (email, password, role, org_id, name, is_verified) 
        VALUES ($1, $2, $3, $4, $5, $6);`,
       ["chuksy3@gmail.com", "Duesly7817##**", "super-admin", null, "Chukwudi Super Admin", true]
+    );
+
+    // Seed default system notification
+    await client.query(
+      `INSERT INTO notifications (id, org_id, vendor_id, role, title, message, read) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7);`,
+      ["NT-RESET-001", null, null, "super-admin", "Platform Reset Successful", "All databases have been successfully clean reset. No client tenants exist.", false]
     );
 
     await client.query("COMMIT;");
