@@ -148,8 +148,18 @@ function Page() {
           <div id="printable-receipt" className="space-y-6 text-center">
             {/* Header */}
             <div className="flex flex-col items-center">
-              <span className="font-display font-black text-2xl tracking-tight text-navy">duesly</span>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mt-1">Official Platform Receipt</p>
+              <div className="inline-flex items-center gap-2 font-display font-bold tracking-tight">
+                <span className="relative grid h-8 w-8 place-items-center rounded-xl bg-gradient-emerald shadow-emerald shrink-0">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 7c4-4 12-4 16 0" />
+                    <path d="M4 12c4-4 12-4 16 0" />
+                    <path d="M4 17c4-4 12-4 16 0" />
+                  </svg>
+                  <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-gold ring-2 ring-background" />
+                </span>
+                <span className="text-lg text-navy">Duesly</span>
+              </div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mt-2.5">Official Platform Receipt</p>
               <p className="text-xs text-muted-foreground mt-0.5">Issued on behalf of Ariaria Market Association</p>
               <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-emerald/10 px-3 py-1 text-xs font-semibold text-emerald">
                 <CheckCircle2 className="h-4 w-4" /> Verified by Duesly
