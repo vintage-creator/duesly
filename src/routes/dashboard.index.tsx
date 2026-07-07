@@ -4,12 +4,15 @@ import { StatCard } from "@/components/duesly/stat-card";
 import { StatusBadge } from "@/components/duesly/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Wallet, TrendingUp, AlertCircle, Users, Download, Plus, Sparkles, BrainCircuit, Send, PieChart as PieChartIcon } from "lucide-react";
+import { Wallet, TrendingUp, AlertCircle, Users, Download, Plus, Sparkles, BrainCircuit, Send, PieChart as PieChartIcon, Printer } from "lucide-react";
 import { formatNaira, formatNumber, monthlyTrend } from "@/lib/sample-data";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { toast } from "sonner";
-import { getDashboardData, generateBills, getAICoachInsights, askAICoach } from "@/lib/db-actions";
+import { getDashboardData, generateBills, getAICoachInsights, askAICoach, getExportTransactions } from "@/lib/db-actions";
 import { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/dashboard/")({
   loader: async () => {
@@ -111,31 +114,44 @@ function Page() {
     });
   };
 
-  const handleExportPayments = () => {
-    if (recentPaymentsData.length === 0) {
-      toast.error("No recent payments available to export.");
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [selectedSection, setSelectedSection] = useState("all");
+  const [allTransactions, setAllTransactions] = useState<any[]>([]);
+  const [exportingPDF, setExportingPDF] = useState(false);
+  const [printableTransactions, setPrintableTransactions] = useState<any[]>([]);
+
+  const handleExportOpen = async () => {
+    setExportDialogOpen(true);
+    try {
+      const res = await getExportTransactions({ data: { orgId: activeOrgId } });
+      setAllTransactions(res || []);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load full transaction history.");
+    }
+  };
+
+  const handleExportPDFSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setExportingPDF(true);
+
+    const filtered = selectedSection === "all"
+      ? allTransactions
+      : allTransactions.filter(t => t.section === selectedSection);
+
+    if (filtered.length === 0) {
+      toast.error("No transactions match the selected section.");
+      setExportingPDF(false);
       return;
     }
-    const headers = ["Payment ID", "Vendor", "Amount (₦)", "Method", "Date", "Status"];
-    const csvRows = [headers.join(",")];
-    recentPaymentsData.forEach(p => {
-      csvRows.push([
-        p.id,
-        `"${p.vendor}"`,
-        p.amount,
-        (p as any).method || p.account || "Bank Transfer",
-        `"${p.date}"`,
-        p.status
-      ].join(","));
-    });
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute("download", `duesly_recent_payments_report.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success("Recent payments registry downloaded!");
+
+    setPrintableTransactions(filtered);
+    
+    setTimeout(() => {
+      window.print();
+      setExportingPDF(false);
+      setExportDialogOpen(false);
+    }, 400);
   };
 
   return (
@@ -144,7 +160,7 @@ function Page() {
       subtitle="Real-time collection overview"
       actions={
         <>
-          <Button variant="outline" onClick={handleExportPayments} disabled={recentPaymentsData.length === 0}><Download className="h-4 w-4" /> Export</Button>
+          <Button variant="outline" className="cursor-pointer" onClick={handleExportOpen} disabled={recentPaymentsData.length === 0}><Download className="h-4 w-4" /> Export</Button>
           <Button variant="hero" onClick={handleGenerateBills}><Plus className="h-4 w-4" /> Generate Bills</Button>
         </>
       }
@@ -366,6 +382,114 @@ function Page() {
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Export Transactions Dialog */}
+      <Dialog open={exportDialogOpen} onOpenChange={(o) => !o && setExportDialogOpen(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display font-bold text-navy text-lg">Export Transaction History</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleExportPDFSubmit} className="space-y-4 py-2">
+            <div>
+              <Label htmlFor="export-section">Filter by Section</Label>
+              <div className="mt-1.5">
+                <Select value={selectedSection} onValueChange={setSelectedSection}>
+                  <SelectTrigger id="export-section" className="w-full bg-transparent border-border focus:ring-emerald cursor-pointer">
+                    <SelectValue placeholder="Select section..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="cursor-pointer">All Sections</SelectItem>
+                    <SelectItem value="Textile Line" className="cursor-pointer">Textile Line</SelectItem>
+                    <SelectItem value="Provisions" className="cursor-pointer">Provisions</SelectItem>
+                    <SelectItem value="Electronics" className="cursor-pointer">Electronics</SelectItem>
+                    <SelectItem value="Cosmetics" className="cursor-pointer">Cosmetics</SelectItem>
+                    <SelectItem value="Grains" className="cursor-pointer">Grains</SelectItem>
+                    <SelectItem value="Hardware" className="cursor-pointer">Hardware</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">Select a specific branch or zone section registry to scope payments, or export all.</p>
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="ghost" onClick={() => setExportDialogOpen(false)}>Cancel</Button>
+              <Button type="submit" variant="hero" disabled={exportingPDF} className="cursor-pointer">
+                <Download className="mr-2 h-4 w-4" /> {exportingPDF ? "Compiling PDF..." : "Export PDF"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hidden Printable PDF Section */}
+      <div id="printable-ledger" className="hidden">
+        <style>{`
+          @media print {
+            body * {
+              visibility: hidden;
+            }
+            #printable-ledger, #printable-ledger * {
+              visibility: visible;
+            }
+            #printable-ledger {
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: 100%;
+              background: white !important;
+              color: black !important;
+              font-family: sans-serif;
+              padding: 24px;
+            }
+          }
+        `}</style>
+        <div className="flex justify-between items-center border-b pb-6 mb-6">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-2xl tracking-tight text-slate-900">duesly</span>
+              <span className="text-[10px] border border-slate-900 px-2 py-0.5 rounded font-bold uppercase tracking-wider">OFFICIAL LEDGER</span>
+            </div>
+            <h1 className="text-xl font-bold text-slate-800 mt-2">{activeOrgName}</h1>
+            <p className="text-xs text-slate-500">Transaction History Report</p>
+          </div>
+          <div className="text-right text-xs text-slate-500 leading-relaxed">
+            <p><strong>Report Scoped:</strong> {selectedSection === "all" ? "All Sections" : `Section: ${selectedSection}`}</p>
+            <p><strong>Printed Date:</strong> {new Date().toLocaleDateString("en-NG")}</p>
+            <p><strong>Platform Status:</strong> Cleared</p>
+          </div>
+        </div>
+
+        <table className="w-full text-xs text-left border-collapse">
+          <thead>
+            <tr className="border-b-2 border-slate-900 text-slate-700 font-bold uppercase">
+              <th className="py-2.5">Ref ID</th>
+              <th className="py-2.5">Member Name</th>
+              <th className="py-2.5">Section</th>
+              <th className="py-2.5">Category</th>
+              <th className="py-2.5 text-right">Amount</th>
+              <th className="py-2.5">Date</th>
+              <th className="py-2.5">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {printableTransactions.map((t) => (
+              <tr key={t.id} className="border-b border-slate-200 text-slate-800">
+                <td className="py-2.5 font-mono text-[10px]">{t.id}</td>
+                <td className="py-2.5 font-semibold">{t.vendor}</td>
+                <td className="py-2.5">{t.section}</td>
+                <td className="py-2.5">{t.category}</td>
+                <td className="py-2.5 text-right font-mono font-semibold">₦{Number(t.amount).toLocaleString("en-NG")}</td>
+                <td className="py-2.5 text-slate-500">{t.date}</td>
+                <td className="py-2.5 font-bold uppercase text-[9px]">{t.status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="mt-8 border-t pt-4 flex justify-between items-center text-[10px] text-slate-500">
+          <p>Duesly Technologies Ltd · Collection Reconciliation Feed</p>
+          <p>Page 1 of 1</p>
         </div>
       </div>
     </OrgShell>

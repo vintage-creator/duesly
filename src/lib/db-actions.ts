@@ -1599,3 +1599,30 @@ export const submitSupportTicket = createServerFn({ method: "POST" })
 
     return { success: true };
   });
+
+export const getExportTransactions = createServerFn({ method: "GET" })
+  .validator(z.object({
+    orgId: z.string().optional()
+  }).optional())
+  .handler(async ({ data }) => {
+    const activeOrgId = data?.orgId || "ORG-001";
+    const res = await pool.query(
+      `SELECT p.id, p.vendor_name as vendor, p.account, p.amount, p.category, p.date, p.status, COALESCE(v.section, 'General') as section
+       FROM payments p
+       LEFT JOIN vendors v ON LOWER(p.vendor_name) = LOWER(v.name) AND p.org_id = v.org_id
+       WHERE p.org_id = $1
+       ORDER BY p.id DESC`,
+      [activeOrgId]
+    );
+
+    return res.rows.map(p => ({
+      id: p.id,
+      vendor: p.vendor,
+      account: p.account,
+      amount: parseFloat(p.amount),
+      category: p.category,
+      date: p.date,
+      status: p.status,
+      section: p.section
+    }));
+  });
