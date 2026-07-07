@@ -70,7 +70,8 @@ async function main() {
         org_id VARCHAR(50) REFERENCES organizations(id) ON DELETE SET NULL,
         name VARCHAR(255) NOT NULL,
         otp VARCHAR(6),
-        is_verified BOOLEAN NOT NULL DEFAULT FALSE
+        is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+        session_token VARCHAR(255) DEFAULT NULL
       );
     `);
 
@@ -161,6 +162,20 @@ async function main() {
       CREATE TABLE system_settings (
         key VARCHAR(255) PRIMARY KEY,
         value VARCHAR(255) NOT NULL
+      );
+    `);
+
+    await client.query(`
+      CREATE TABLE withdrawals (
+        id VARCHAR(50) PRIMARY KEY,
+        org_id VARCHAR(50) REFERENCES organizations(id) ON DELETE CASCADE,
+        vendor_id VARCHAR(50) REFERENCES vendors(id) ON DELETE SET NULL,
+        vendor_name VARCHAR(255) NOT NULL,
+        amount NUMERIC(12,2) NOT NULL,
+        bank_name VARCHAR(255) NOT NULL,
+        account_number VARCHAR(10) NOT NULL,
+        status VARCHAR(50) NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 

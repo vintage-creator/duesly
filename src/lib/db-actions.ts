@@ -1544,6 +1544,10 @@ export const loginUser = createServerFn({ method: "POST" })
       }
       orgType = orgRes.rows[0]?.type || "Market";
     }
+
+    const token = "SES-" + Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+    await pool.query("UPDATE users SET session_token = $1 WHERE LOWER(email) = $2", [token, user.email.toLowerCase()]);
+
     return {
       success: true,
       user: {
@@ -1551,7 +1555,8 @@ export const loginUser = createServerFn({ method: "POST" })
         name: user.name,
         role: user.role,
         org_id: user.org_id,
-        org_type: orgType
+        org_type: orgType,
+        sessionToken: token
       }
     };
   });
@@ -2507,14 +2512,54 @@ export const submitWithdrawalRequest = createServerFn({ method: "POST" })
     orgId: z.string(),
     amount: z.number(),
     bankName: z.string(),
-    accountNumber: z.string()
+    accountNumber: z.string(),
+    email: z.string().email(),
+    sessionToken: z.string()
   }))
   .handler(async ({ data }) => {
-    const vendorRes = await pool.query("SELECT name, shop, phone FROM vendors WHERE id = $1", [data.vendorId]);
+    // Validate session
+    const authRes = await pool.query(
+      "SELECT role FROM users WHERE LOWER(email) = $1 AND session_token = $2 LIMIT 1",
+      [data.email.toLowerCase(), data.sessionToken]
+    );
+    if (authRes.rowCount === 0) {
+      return { success: false, error: "Unauthorized session. Please log in again." };
+    }
+
+    const vendorRes = await pool.query("SELECT name, shop, phone, paid, email FROM vendors WHERE id = $1", [data.vendorId]);
     if (!vendorRes.rowCount) {
       return { success: false, error: "Member not found" };
     }
     const vendor = vendorRes.rows[0];
+
+    // Verify requesting email matches vendor's email
+    if (vendor.email && vendor.email.toLowerCase() !== data.email.toLowerCase()) {
+      return { success: false, error: "Unauthorized vendor account mismatch" };
+    }
+
+    // Verify balance
+    const vendorPaid = parseFloat(vendor.paid) || 0;
+    if (vendorPaid < data.amount) {
+      return { success: false, error: "Insufficient balance for withdrawal" };
+    }
+
+    const withdrawalId = "WD-REQ-" + Math.floor(100000 + Math.random() * 900000);
+
+    // Insert into withdrawals table
+    await pool.query(
+      `INSERT INTO withdrawals (id, org_id, vendor_id, vendor_name, amount, bank_name, account_number, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        withdrawalId,
+        data.orgId,
+        data.vendorId,
+        vendor.name,
+        data.amount,
+        data.bankName,
+        data.accountNumber,
+        "pending"
+      ]
+    );
 
     // Create admin notification
     await createNotification(
@@ -2522,7 +2567,7 @@ export const submitWithdrawalRequest = createServerFn({ method: "POST" })
       null,
       "admin",
       "Withdrawal Request: Pending",
-      `Member "${vendor.name}" (Shop ${vendor.shop}) requested a withdrawal of ₦${data.amount.toLocaleString()} to ${data.bankName} (${data.accountNumber}).\nContact: ${vendor.phone}`
+      `Member "${vendor.name}" (Shop ${vendor.shop}) requested a withdrawal of ₦${data.amount.toLocaleString()} to ${data.bankName} (${data.accountNumber}).\nContact: ${vendor.phone}\n[Withdrawal ID: ${withdrawalId}]`
     );
 
     // Create vendor notification
@@ -2539,26 +2584,73 @@ export const submitWithdrawalRequest = createServerFn({ method: "POST" })
 
 export const approveWithdrawalRequest = createServerFn({ method: "POST" })
   .validator(z.object({
-    notificationId: z.string()
+    notificationId: z.string(),
+    adminEmail: z.string().email(),
+    sessionToken: z.string()
   }))
   .handler(async ({ data }) => {
+    // Validate session
+    const authRes = await pool.query(
+      "SELECT role FROM users WHERE LOWER(email) = $1 AND session_token = $2 LIMIT 1",
+      [data.adminEmail.toLowerCase(), data.sessionToken]
+    );
+    if (authRes.rowCount === 0) {
+      return { success: false, error: "Unauthorized session. Please log in again." };
+    }
+    const caller = authRes.rows[0];
+    if (caller.role !== "admin" && caller.role !== "super-admin") {
+      return { success: false, error: "Unauthorized: Insufficient permissions" };
+    }
+
     const notiRes = await pool.query("SELECT * FROM notifications WHERE id = $1", [data.notificationId]);
     if (!notiRes.rowCount) {
       return { success: false, error: "Request not found" };
     }
     const noti = notiRes.rows[0];
-    
-    const nameMatch = noti.message.match(/Member\s*"([^"]+)"/i);
-    const amountMatch = noti.message.match(/withdrawal of\s*₦?([\d,]+)/i);
-    
-    if (!nameMatch || !amountMatch) {
-      return { success: false, error: "Could not parse request details" };
+
+    const withdrawalIdMatch = noti.message.match(/\[Withdrawal ID:\s*([^\]]+)\]/);
+    let vendorName = "";
+    let amount = 0;
+    let rawBank = "Zenith Bank";
+    let destinationAccount = "";
+    let vendorId = "";
+    let withdrawalRow: any = null;
+
+    if (withdrawalIdMatch) {
+      const withdrawalId = withdrawalIdMatch[1].trim();
+      const wdRes = await pool.query("SELECT * FROM withdrawals WHERE id = $1 LIMIT 1", [withdrawalId]);
+      if (wdRes.rowCount) {
+        withdrawalRow = wdRes.rows[0];
+        if (withdrawalRow.status !== "pending") {
+          return { success: false, error: "This withdrawal request has already been processed" };
+        }
+        amount = parseFloat(withdrawalRow.amount);
+        rawBank = withdrawalRow.bank_name;
+        destinationAccount = withdrawalRow.account_number;
+        vendorId = withdrawalRow.vendor_id;
+        vendorName = withdrawalRow.vendor_name;
+      }
     }
-    
-    const vendorName = nameMatch[1];
-    const amount = parseFloat(amountMatch[1].replace(/,/g, ""));
-    
-    const vendorRes = await pool.query("SELECT * FROM vendors WHERE name = $1 AND org_id = $2", [vendorName, noti.org_id]);
+
+    if (!withdrawalRow) {
+      const nameMatch = noti.message.match(/Member\s*"([^"]+)"/i);
+      const amountMatch = noti.message.match(/withdrawal of\s*₦?([\d,]+)/i);
+      if (!nameMatch || !amountMatch) {
+        return { success: false, error: "Could not parse request details" };
+      }
+      vendorName = nameMatch[1];
+      amount = parseFloat(amountMatch[1].replace(/,/g, ""));
+      const bankMatch = noti.message.match(/to\s*([^(\n]+)/i);
+      rawBank = bankMatch ? bankMatch[1].trim() : "Zenith Bank";
+    }
+
+    let vendorRes;
+    if (vendorId) {
+      vendorRes = await pool.query("SELECT * FROM vendors WHERE id = $1 LIMIT 1", [vendorId]);
+    } else {
+      vendorRes = await pool.query("SELECT * FROM vendors WHERE name = $1 AND org_id = $2", [vendorName, noti.org_id]);
+    }
+
     if (!vendorRes.rowCount) {
       return { success: false, error: "Member not found" };
     }
@@ -2577,8 +2669,10 @@ export const approveWithdrawalRequest = createServerFn({ method: "POST" })
       const accessToken = await getNombaAccessToken();
       const parentAccountId = process.env.NOMBA_PARENT_ACCOUNT_ID;
       
-      const bankMatch = noti.message.match(/to\s*([^(\n]+)/i);
-      const rawBank = bankMatch ? bankMatch[1].trim() : "Zenith Bank";
+      if (!withdrawalRow) {
+        const accountNoMatch = noti.message.match(/\((\d{10})\)/);
+        destinationAccount = accountNoMatch ? accountNoMatch[1].trim() : "";
+      }
       
       const getBankCode = (bankName: string) => {
         const name = bankName.toLowerCase();
@@ -2603,8 +2697,6 @@ export const approveWithdrawalRequest = createServerFn({ method: "POST" })
       };
       
       const bankCode = getBankCode(rawBank);
-      const accountNoMatch = noti.message.match(/\((\d{10})\)/);
-      const destinationAccount = accountNoMatch ? accountNoMatch[1].trim() : "";
       
       if (!accessToken || !parentAccountId || !destinationAccount) {
         return { success: false, error: "API Payout credentials or destination account missing" };
@@ -2687,6 +2779,10 @@ export const approveWithdrawalRequest = createServerFn({ method: "POST" })
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [rcpId, vendor.org_id, vendor.name, "Withdrawal Refund", -amount, todayStr, "Refunded"]
     );
+
+    if (withdrawalRow) {
+      await pool.query("UPDATE withdrawals SET status = 'approved' WHERE id = $1", [withdrawalRow.id]);
+    }
 
     await pool.query("UPDATE notifications SET read = true WHERE id = $1", [data.notificationId]);
 

@@ -317,13 +317,17 @@ function Page() {
     setSubmittingWithdrawal(true);
     const toastId = toast.loading("Submitting withdrawal request to admin...");
     try {
+      const localUser = localStorage.getItem("user");
+      const parsed = localUser ? JSON.parse(localUser) : null;
       const res = await submitWithdrawalRequest({
         data: {
           vendorId: vendor.id,
           orgId: vendor.orgId,
           amount: amountNum,
           bankName: withdrawalBankName,
-          accountNumber: withdrawalAccountNumber
+          accountNumber: withdrawalAccountNumber,
+          email: parsed?.email || "",
+          sessionToken: parsed?.sessionToken || ""
         }
       });
       if (res.success) {

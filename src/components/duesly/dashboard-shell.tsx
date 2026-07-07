@@ -157,7 +157,15 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
     setApprovingWithdrawal(true);
     const toastId = toast.loading("Processing virtual account payout via Duesly Payment Infrastructure...");
     try {
-      const res = await approveWithdrawalRequest({ data: { notificationId: notiId } });
+      const localUser = localStorage.getItem("user");
+      const parsed = localUser ? JSON.parse(localUser) : null;
+      const res = await approveWithdrawalRequest({
+        data: {
+          notificationId: notiId,
+          adminEmail: parsed?.email || "",
+          sessionToken: parsed?.sessionToken || ""
+        }
+      });
       if (res.success) {
         toast.success("Withdrawal approved successfully! Funds have been disbursed.", { id: toastId });
         setSelectedAlert(null);
