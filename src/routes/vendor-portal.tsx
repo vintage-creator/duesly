@@ -858,6 +858,16 @@ function Page() {
           </div>
         )}
 
+        {isLookupOnly && (
+          <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-xs text-blue-800 flex items-center justify-between gap-4 shadow-sm animate-fade-in">
+            <p className="flex items-center gap-1.5 font-sans leading-relaxed">
+              <span>ℹ️</span> 
+              <span><strong>Read-Only Lookup Mode:</strong> You are viewing payments and compliance status. Payout withdrawals and credentials setup require signing in securely.</span>
+            </p>
+            <Link to="/login" className="font-semibold underline hover:text-blue-900 shrink-0">Sign In</Link>
+          </div>
+        )}
+
         <div className="rounded-3xl bg-gradient-hero p-6 text-white shadow-elevated sm:p-8">
           <p className="text-sm text-white/70">Welcome back,</p>
           <h1 className="font-display text-3xl font-bold">{vendor.name}</h1>
@@ -875,13 +885,15 @@ function Page() {
                   {copiedAccount ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   {copiedAccount ? "Copied" : "Copy Account"}
                 </Button>
-                <Button 
-                  variant="outline" 
-                  className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white cursor-pointer text-xs"
-                  onClick={() => setWithdrawalDialogOpen(true)}
-                >
-                  Request Refund / Withdrawal
-                </Button>
+                {!isLookupOnly && (
+                  <Button 
+                    variant="outline" 
+                    className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white cursor-pointer text-xs"
+                    onClick={() => setWithdrawalDialogOpen(true)}
+                  >
+                    Request Refund / Withdrawal
+                  </Button>
+                )}
               </div>
             </div>
           </div>

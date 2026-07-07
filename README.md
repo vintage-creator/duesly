@@ -67,9 +67,6 @@ npm run build
 
 ## Demo Login Accounts
 
-*   **Super Admin (Platform-wide Owner)**:
-    *   *Email*: `canipf.ng@gmail.com`
-    *   *Password*: `Duesly7817##**`
 *   **Organization Admins (Dynamic layout & terminology shifts)**:
     *   **Market Admin (Ariaria Market Association)**:
         *   *Email*: `admin@ariaria.org`
