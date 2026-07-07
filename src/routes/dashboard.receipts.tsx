@@ -35,7 +35,6 @@ function Page() {
     }
   }, [receipts]);
 
-  const [printableReceipts, setPrintableReceipts] = useState<any[]>([]);
   const [exportingAll, setExportingAll] = useState(false);
 
   const handleExportAll = () => {
@@ -44,11 +43,10 @@ function Page() {
       return;
     }
     setExportingAll(true);
-    setPrintableReceipts(receiptsList);
     setTimeout(() => {
       window.print();
       setExportingAll(false);
-    }, 400);
+    }, 100);
   };
 
   const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
@@ -265,7 +263,7 @@ function Page() {
             </tr>
           </thead>
           <tbody>
-            {printableReceipts.map((r) => (
+            {receiptsList.map((r) => (
               <tr key={r.id} className="border-b border-slate-200 text-slate-800">
                 <td className="py-2.5 font-mono text-[10px]">{r.id}</td>
                 <td className="py-2.5 font-semibold">{r.vendor}</td>

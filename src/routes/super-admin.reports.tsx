@@ -24,7 +24,6 @@ function Page() {
   }));
   const isChartEmpty = data.every(item => item.collected === 0);
 
-  const [printableOrgs, setPrintableOrgs] = useState<any[]>([]);
   const [exporting, setExporting] = useState(false);
 
   const handleExportPDF = () => {
@@ -33,11 +32,10 @@ function Page() {
       return;
     }
     setExporting(true);
-    setPrintableOrgs(organizations);
     setTimeout(() => {
       window.print();
       setExporting(false);
-    }, 400);
+    }, 100);
   };
 
   if (organizations.length === 0) {
@@ -148,7 +146,7 @@ function Page() {
             </tr>
           </thead>
           <tbody>
-            {printableOrgs.map((o) => (
+            {organizations.map((o) => (
               <tr key={o.id} className="border-b border-slate-200 text-slate-800">
                 <td className="py-2.5 font-mono text-[10px]">{o.id}</td>
                 <td className="py-2.5 font-semibold">{o.name}</td>

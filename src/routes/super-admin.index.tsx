@@ -8,6 +8,7 @@ import { formatNaira, formatNumber, monthlyTrend } from "@/lib/sample-data";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { toast } from "sonner";
 import { getSuperAdminData } from "@/lib/db-actions";
+import { useState } from "react";
 
 export const Route = createFileRoute("/super-admin/")({
   loader: async () => {
@@ -21,7 +22,6 @@ function Page() {
   const { stats, organizations, trend } = Route.useLoaderData();
   const isTrendEmpty = (trend || []).every(t => t.collected === 0);
 
-  const [printableOrgs, setPrintableOrgs] = useState<any[]>([]);
   const [exporting, setExporting] = useState(false);
 
   const handleExportPDF = () => {
@@ -30,11 +30,10 @@ function Page() {
       return;
     }
     setExporting(true);
-    setPrintableOrgs(organizations);
     setTimeout(() => {
       window.print();
       setExporting(false);
-    }, 400);
+    }, 100);
   };
 
   return (
@@ -178,7 +177,7 @@ function Page() {
             </tr>
           </thead>
           <tbody>
-            {printableOrgs.map((o) => (
+            {organizations.map((o) => (
               <tr key={o.id} className="border-b border-slate-200 text-slate-800">
                 <td className="py-2.5 font-mono text-[10px]">{o.id}</td>
                 <td className="py-2.5 font-semibold">{o.name}</td>

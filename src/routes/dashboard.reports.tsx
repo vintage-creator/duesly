@@ -61,29 +61,26 @@ function Page() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [selectedSection, setSelectedSection] = useState("all");
   const [exporting, setExporting] = useState(false);
-  const [printableVendors, setPrintableVendors] = useState<any[]>([]);
+
+  const filteredVendors = selectedSection === "all"
+    ? vendorsList
+    : vendorsList.filter((v: any) => v.section === selectedSection);
 
   const handleExportPDFSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setExporting(true);
 
-    const filtered = selectedSection === "all"
-      ? vendorsList
-      : vendorsList.filter((v: any) => v.section === selectedSection);
-
-    if (filtered.length === 0) {
+    if (filteredVendors.length === 0) {
       toast.error("No member metrics found matching the selected section.");
       setExporting(false);
       return;
     }
 
-    setPrintableVendors(filtered);
-
     setTimeout(() => {
       window.print();
       setExporting(false);
       setExportDialogOpen(false);
-    }, 400);
+    }, 100);
   };
 
   if (vendorsList.length === 0) {
@@ -296,7 +293,7 @@ function Page() {
             </tr>
           </thead>
           <tbody>
-            {printableVendors.map((v) => (
+            {filteredVendors.map((v) => (
               <tr key={v.id} className="border-b border-slate-200 text-slate-800">
                 <td className="py-2.5 font-semibold">{v.name}</td>
                 <td className="py-2.5">{v.shop}</td>

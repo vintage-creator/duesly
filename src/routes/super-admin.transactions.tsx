@@ -25,7 +25,10 @@ function Page() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [selectedOrg, setSelectedOrg] = useState("all");
   const [exporting, setExporting] = useState(false);
-  const [printableTransactions, setPrintableTransactions] = useState<any[]>([]);
+
+  const filtered = selectedOrg === "all"
+    ? rows
+    : rows.filter((r: any) => r.org === selectedOrg);
 
   // Dynamically extract unique tenant organizations from transactions list
   const uniqueOrgs = Array.from(new Set(rows.map((r: any) => r.org))).filter(Boolean);
@@ -34,23 +37,17 @@ function Page() {
     e.preventDefault();
     setExporting(true);
 
-    const filtered = selectedOrg === "all"
-      ? rows
-      : rows.filter((r: any) => r.org === selectedOrg);
-
     if (filtered.length === 0) {
       toast.error("No transactions found matching the selected organization.");
       setExporting(false);
       return;
     }
 
-    setPrintableTransactions(filtered);
-
     setTimeout(() => {
       window.print();
       setExporting(false);
       setExportDialogOpen(false);
-    }, 400);
+    }, 100);
   };
 
   return (
@@ -187,7 +184,7 @@ function Page() {
             </tr>
           </thead>
           <tbody>
-            {printableTransactions.map((t) => (
+            {filtered.map((t) => (
               <tr key={t.id} className="border-b border-slate-200 text-slate-800">
                 <td className="py-2.5 font-mono text-[10px]">{t.id}</td>
                 <td className="py-2.5 font-semibold">{t.org}</td>
