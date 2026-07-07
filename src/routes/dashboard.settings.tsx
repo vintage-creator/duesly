@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { OrgShell } from "./dashboard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ export const Route = createFileRoute("/dashboard/settings")({
 });
 
 function Page() {
+  const router = useRouter();
   const { orgName } = Route.useLoaderData();
 
   const [user, setUser] = useState<{ email: string; name: string; org_id?: string } | null>(null);
@@ -85,6 +86,7 @@ function Page() {
         }
       });
       if (res.success && res.org) {
+        router.invalidate();
         toast.success("Organization profile saved successfully!");
       } else {
         toast.error(res.error || "Failed to save organization");
@@ -111,6 +113,8 @@ function Page() {
       });
       if (res.success && res.user) {
         localStorage.setItem("user", JSON.stringify(res.user));
+        window.dispatchEvent(new Event("user-updated"));
+        router.invalidate();
         toast.success("Personal profile settings saved!");
         setPassword("");
       } else {

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { SuperShell } from "./super-admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ export const Route = createFileRoute("/super-admin/settings")({
 });
 
 function Page() {
+  const router = useRouter();
   const [user, setUser] = useState<{ email: string; name: string } | null>(null);
   const [profileName, setProfileName] = useState("");
   const [password, setPassword] = useState("");
@@ -42,6 +43,8 @@ function Page() {
       });
       if (res.success && res.user) {
         localStorage.setItem("user", JSON.stringify(res.user));
+        window.dispatchEvent(new Event("user-updated"));
+        router.invalidate();
         toast.success("Super Admin credentials updated successfully!");
         setPassword("");
       } else {

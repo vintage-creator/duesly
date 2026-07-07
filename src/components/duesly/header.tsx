@@ -2,11 +2,30 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { DueslyLogo } from "@/components/duesly/logo";
 import { ChevronDown, Menu, X, Store, Building, Handshake, Users } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export function NavigationHeader({ activeSolution }: { activeSolution?: string }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [user, setUser] = useState<any | null>(null);
+
+  useEffect(() => {
+    const localUser = localStorage.getItem("user");
+    if (localUser) {
+      try {
+        setUser(JSON.parse(localUser));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
+
+  const getDashboardLink = () => {
+    if (!user) return "/login";
+    if (user.role === "super-admin") return "/super-admin";
+    if (user.role === "vendor") return "/vendor-portal";
+    return "/dashboard";
+  };
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-card/85 backdrop-blur-md">
@@ -72,12 +91,20 @@ export function NavigationHeader({ activeSolution }: { activeSolution?: string }
         </nav>
 
         <div className="hidden items-center gap-4 md:flex">
-          <Link to="/login" className="text-sm font-semibold text-muted-foreground hover:text-foreground">
-            Sign In
-          </Link>
-          <Button variant="hero" size="sm" asChild>
-            <Link to="/signup">Get Started</Link>
-          </Button>
+          {user ? (
+            <Button variant="hero" size="sm" asChild className="cursor-pointer">
+              <Link to={getDashboardLink()}>Go to Dashboard</Link>
+            </Button>
+          ) : (
+            <>
+              <Link to="/login" className="text-sm font-semibold text-muted-foreground hover:text-foreground">
+                Sign In
+              </Link>
+              <Button variant="hero" size="sm" asChild>
+                <Link to="/signup">Get Started</Link>
+              </Button>
+            </>
+          )}
         </div>
 
         <button
@@ -134,12 +161,20 @@ export function NavigationHeader({ activeSolution }: { activeSolution?: string }
               FAQ
             </a>
             <div className="mt-2 grid grid-cols-2 gap-2">
-              <Button variant="outline" asChild>
-                <Link to="/login">Sign in</Link>
-              </Button>
-              <Button variant="hero" asChild>
-                <Link to="/signup">Get started</Link>
-              </Button>
+              {user ? (
+                <Button variant="hero" className="col-span-2 cursor-pointer" asChild onClick={() => setMenuOpen(false)}>
+                  <Link to={getDashboardLink()}>Go to Dashboard</Link>
+                </Button>
+              ) : (
+                <>
+                  <Button variant="outline" asChild onClick={() => setMenuOpen(false)}>
+                    <Link to="/login">Sign in</Link>
+                  </Button>
+                  <Button variant="hero" asChild onClick={() => setMenuOpen(false)}>
+                    <Link to="/signup">Get started</Link>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>

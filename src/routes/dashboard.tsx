@@ -18,6 +18,30 @@ export function OrgShell({ title, subtitle, actions, children }: { title: string
   const [authorized, setAuthorized] = useState(false);
   const navigate = useNavigate();
 
+  const syncUser = () => {
+    const localUser = localStorage.getItem("user");
+    if (localUser) {
+      try {
+        const parsed = JSON.parse(localUser);
+        if (parsed.role === "admin" || parsed.role === "super-admin") {
+          setUserName(parsed.name || "Admin");
+          setUserRole(parsed.role === "admin" ? "Organization Admin" : "Super Admin");
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener("user-updated", syncUser);
+    window.addEventListener("storage", syncUser);
+    return () => {
+      window.removeEventListener("user-updated", syncUser);
+      window.removeEventListener("storage", syncUser);
+    };
+  }, []);
+
   useEffect(() => {
     const localUser = localStorage.getItem("user");
     if (!localUser) {

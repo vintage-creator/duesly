@@ -14,6 +14,29 @@ export function SuperShell({ title, subtitle, actions, children }: { title: stri
   const [authorized, setAuthorized] = useState(false);
   const navigate = useNavigate();
 
+  const syncUser = () => {
+    const localUser = localStorage.getItem("user");
+    if (localUser) {
+      try {
+        const parsed = JSON.parse(localUser);
+        if (parsed.role === "super-admin") {
+          setAdminName(parsed.name || "Super Admin");
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener("user-updated", syncUser);
+    window.addEventListener("storage", syncUser);
+    return () => {
+      window.removeEventListener("user-updated", syncUser);
+      window.removeEventListener("storage", syncUser);
+    };
+  }, []);
+
   useEffect(() => {
     const localUser = localStorage.getItem("user");
     if (!localUser) {
