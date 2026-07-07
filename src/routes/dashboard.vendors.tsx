@@ -11,7 +11,7 @@ import { Plus, Search, Filter, Copy, Phone, MapPin, Upload, LayoutGrid, List } f
 import { formatNaira } from "@/lib/sample-data";
 import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
-import { getVendors, createVendor, getVendorHistory, importVendorsCSV } from "@/lib/db-actions";
+import { getVendors, createVendor, getVendorHistory, importVendorsCSV, sendPaymentReminder } from "@/lib/db-actions";
 import * as XLSX from "xlsx";
 
 type Vendor = {
@@ -105,6 +105,31 @@ function Page() {
       setHistory([]);
     }
   }, [active]);
+
+  const [sendingReminder, setSendingReminder] = useState(false);
+
+  const handleSendReminder = async () => {
+    if (!active) return;
+    setSendingReminder(true);
+    try {
+      const res = await sendPaymentReminder({
+        data: {
+          vendorId: active.id,
+          orgId: active.orgId || activeOrgId || "ORG-001"
+        }
+      });
+      if (res.success) {
+        toast.success("Payment reminder successfully sent and registered!");
+      } else {
+        toast.error(res.error || "Failed to send reminder");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error sending payment reminder");
+    } finally {
+      setSendingReminder(false);
+    }
+  };
 
   const handleAddVendor = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -472,7 +497,14 @@ function Page() {
                 </div>
                 <div className="flex gap-2 pt-2">
                   <Button variant="navy" className="flex-1" onClick={() => toast.success("Receipts shared with vendor via SMS & WhatsApp")}><MapPin className="h-4 w-4" />Share receipts</Button>
-                  <Button variant="outline" onClick={() => toast.success("Payment reminder sent to vendor's phone number")}>Remind</Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleSendReminder} 
+                    disabled={sendingReminder}
+                    className="cursor-pointer"
+                  >
+                    {sendingReminder ? "Sending..." : "Remind"}
+                  </Button>
                 </div>
               </div>
             </>

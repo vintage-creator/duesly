@@ -1381,3 +1381,42 @@ export async function createNotification(orgId: string | null, vendorId: string 
     console.error("Failed to create notification:", err);
   }
 }
+
+export const sendPaymentReminder = createServerFn({ method: "POST" })
+  .validator(z.object({
+    vendorId: z.string(),
+    orgId: z.string(),
+  }))
+  .handler(async ({ data }) => {
+    const vendorRes = await pool.query("SELECT name, due, paid, phone FROM vendors WHERE id = $1", [data.vendorId]);
+    if (!vendorRes.rowCount) {
+      return { success: false, error: "Vendor not found" };
+    }
+    const vendor = vendorRes.rows[0];
+    const outstanding = Math.max(0, parseFloat(vendor.due) - parseFloat(vendor.paid));
+
+    if (outstanding <= 0) {
+      return { success: false, error: "This vendor has no outstanding levies." };
+    }
+
+    const orgRes = await pool.query("SELECT name FROM organizations WHERE id = $1", [data.orgId]);
+    const orgName = orgRes.rows[0]?.name || "Duesly Admin";
+
+    await createNotification(
+      data.orgId,
+      data.vendorId,
+      "vendor",
+      "Payment Reminder Notice",
+      `${orgName} Admin has requested payment for your outstanding levy balance of ₦${outstanding.toLocaleString()}. Please deposit via bank transfer to your dedicated payment account.`
+    );
+
+    await createNotification(
+      data.orgId,
+      null,
+      "admin",
+      "Reminder Sent",
+      `Payment reminder for outstanding dues of ₦${outstanding.toLocaleString()} successfully dispatched to ${vendor.name} (${vendor.phone}).`
+    );
+
+    return { success: true };
+  });
