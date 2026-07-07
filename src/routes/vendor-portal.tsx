@@ -9,7 +9,7 @@ import { ArrowDownLeft, ArrowUpRight, Copy, MessageCircle, Download, LogOut, Rec
 import { formatNaira } from "@/lib/sample-data";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { getVendorPortal, completeVendorOnboarding, getNotifications, markNotificationRead, clearAllNotifications, submitSupportTicket, updateUserProfile, submitWithdrawalRequest } from "@/lib/db-actions";
+import { getVendorPortal, completeVendorOnboarding, getNotifications, markNotificationRead, clearAllNotifications, submitSupportTicket, updateUserProfile, submitWithdrawalRequest, setVendorWithdrawalPin } from "@/lib/db-actions";
 import { getReceiptVerificationCode } from "@/lib/receipt-utils";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
@@ -117,8 +117,13 @@ function Page() {
   const [onboardDialogOpen, setOnboardDialogOpen] = useState(false);
   const [onboardEmail, setOnboardEmail] = useState("");
   const [onboardPassword, setOnboardPassword] = useState("");
+  const [onboardPin, setOnboardPin] = useState("");
   const [submittingOnboard, setSubmittingOnboard] = useState(false);
   const [showOnboardPass, setShowOnboardPass] = useState(false);
+  const [setupPinDialogOpen, setSetupPinDialogOpen] = useState(false);
+  const [setupPinValue, setSetupPinValue] = useState("");
+  const [submittingSetupPin, setSubmittingSetupPin] = useState(false);
+  const [withdrawalPinInput, setWithdrawalPinInput] = useState("");
   const [activeNotis, setActiveNotis] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
@@ -312,8 +317,16 @@ function Page() {
       toast.error("Please enter a valid amount greater than ₦0");
       return;
     }
+    if (amountNum > 100000) {
+      toast.error("Withdrawal amount cannot exceed ₦100,000 per single request");
+      return;
+    }
     if (!withdrawalAccountNumber || withdrawalAccountNumber.length < 10) {
       toast.error("Please enter a valid 10-digit account number");
+      return;
+    }
+    if (withdrawalPinInput.length !== 4) {
+      toast.error("Please enter your 4-digit transaction security PIN");
       return;
     }
     setSubmittingWithdrawal(true);
@@ -329,13 +342,15 @@ function Page() {
           bankName: withdrawalBankName,
           accountNumber: withdrawalAccountNumber,
           email: parsed?.email || "",
-          sessionToken: parsed?.sessionToken || ""
+          sessionToken: parsed?.sessionToken || "",
+          pin: withdrawalPinInput
         }
       });
       if (res.success) {
         toast.success("Withdrawal request logged successfully! Pending administrator approval.", { id: toastId });
         setWithdrawalAmount("");
         setWithdrawalAccountNumber("");
+        setWithdrawalPinInput("");
         setWithdrawalDialogOpen(false);
         fetchNotis();
       } else {
@@ -391,6 +406,15 @@ function Page() {
     }
   }, []);
 
+  // Trigger force PIN setup modal for onboarded logged-in vendors without a PIN
+  useEffect(() => {
+    if (vendor && !isLookupOnly && !vendor.withdrawalPinSet) {
+      setSetupPinDialogOpen(true);
+    } else {
+      setSetupPinDialogOpen(false);
+    }
+  }, [vendor, isLookupOnly]);
+
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
@@ -430,19 +454,25 @@ function Page() {
       toast.error("Please provide a valid email and a password of at least 6 characters");
       return;
     }
+    if (onboardPin.length !== 4) {
+      toast.error("Please choose a 4-digit transaction security PIN.");
+      return;
+    }
     setSubmittingOnboard(true);
     try {
       const res = await completeVendorOnboarding({
         data: {
           vendorId: vendor.id,
           email: onboardEmail,
-          password: onboardPassword
+          password: onboardPassword,
+          withdrawalPin: onboardPin
         }
       });
       if (res.success && res.user) {
         localStorage.setItem("user", JSON.stringify(res.user));
         setIsLookupOnly(false);
         setOnboardDialogOpen(false);
+        setVendor({ ...vendor, email: onboardEmail, withdrawalPinSet: true });
         toast.success("Portal access secured! Your email login is now active.");
       } else {
         toast.error(res.error || "Failed to complete onboarding");
@@ -452,6 +482,42 @@ function Page() {
       toast.error("Error securing portal credentials");
     } finally {
       setSubmittingOnboard(false);
+    }
+  };
+
+  const handleSetupPinSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!vendor) return;
+    if (setupPinValue.length !== 4) {
+      toast.error("Please enter a 4-digit PIN.");
+      return;
+    }
+    setSubmittingSetupPin(true);
+    const toastId = toast.loading("Saving your withdrawal security PIN...");
+    try {
+      const localUser = localStorage.getItem("user");
+      const parsed = localUser ? JSON.parse(localUser) : null;
+      const res = await setVendorWithdrawalPin({
+        data: {
+          vendorId: vendor.id,
+          email: parsed?.email || vendor.email || "",
+          sessionToken: parsed?.sessionToken || "",
+          pin: setupPinValue
+        }
+      });
+      if (res.success) {
+        toast.success("Security PIN set successfully!", { id: toastId });
+        setSetupPinDialogOpen(false);
+        setVendor({ ...vendor, withdrawalPinSet: true });
+        setSetupPinValue("");
+      } else {
+        toast.error(res.error || "Failed to set security PIN", { id: toastId });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error setting security PIN", { id: toastId });
+    } finally {
+      setSubmittingSetupPin(false);
     }
   };
 
@@ -765,6 +831,20 @@ function Page() {
                         {showOnboardPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="onboard-pin">Choose 4-Digit Withdrawal PIN</Label>
+                    <Input 
+                      id="onboard-pin" 
+                      type="password" 
+                      maxLength={4}
+                      pattern="\d{4}"
+                      required 
+                      value={onboardPin} 
+                      onChange={(e) => setOnboardPin(e.target.value.replace(/\D/g, ""))} 
+                      placeholder="e.g. 1234 (Numbers only)" 
+                      className="mt-1" 
+                    />
                   </div>
                   <DialogFooter className="pt-2">
                     <Button type="button" variant="ghost" onClick={() => setOnboardDialogOpen(false)}>Cancel</Button>
@@ -1310,12 +1390,73 @@ function Page() {
               />
             </div>
 
+            <div>
+              <Label htmlFor="withdrawal-pin-confirm" className="text-xs font-semibold text-slate-600">4-Digit Transaction security PIN</Label>
+              <Input 
+                id="withdrawal-pin-confirm"
+                type="password"
+                required
+                maxLength={4}
+                pattern="\d{4}"
+                placeholder="Enter your 4-digit PIN"
+                value={withdrawalPinInput}
+                onChange={(e) => setWithdrawalPinInput(e.target.value.replace(/\D/g, ""))}
+                className="mt-1.5"
+              />
+            </div>
+
             <DialogFooter className="mt-6 flex flex-row justify-end gap-2 border-t pt-4">
               <Button type="button" variant="outline" className="cursor-pointer flex-1 sm:flex-none" onClick={() => setWithdrawalDialogOpen(false)}>
                 Cancel
               </Button>
               <Button type="submit" variant="hero" className="cursor-pointer flex-1 sm:flex-none" disabled={submittingWithdrawal}>
                 {submittingWithdrawal ? "Submitting..." : "Submit Payout"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Force Setup Withdrawal PIN Dialog */}
+      <Dialog open={setupPinDialogOpen} onOpenChange={() => {}}>
+        <DialogContent 
+          className="max-w-md p-6 bg-card border border-border shadow-elevated rounded-3xl animate-fade-in-up" 
+          onPointerDownOutside={(e) => e.preventDefault()} 
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader className="pb-3 border-b">
+            <DialogTitle className="font-display font-bold text-navy text-lg flex items-center gap-2">
+              <Lock className="h-5 w-5 text-emerald" /> Secure Your Wallet Payouts
+            </DialogTitle>
+          </DialogHeader>
+          
+          <form onSubmit={handleSetupPinSubmit} className="mt-4 space-y-4">
+            <div className="bg-emerald/5 rounded-2xl p-4 border border-emerald/10 text-xs text-emerald-800 space-y-1">
+              <p className="font-semibold">Setup 4-Digit Payout Security PIN</p>
+              <p>For security, please set up a 4-digit transaction PIN. This PIN is required to authorize all future withdrawal and refund requests from your Duesly wallet.</p>
+            </div>
+
+            <div>
+              <Label htmlFor="setup-pin-input" className="text-xs font-semibold text-slate-600">Choose 4-Digit PIN</Label>
+              <Input 
+                id="setup-pin-input"
+                type="password"
+                required
+                maxLength={4}
+                pattern="\d{4}"
+                placeholder="Choose a 4-digit PIN (numbers only)"
+                value={setupPinValue}
+                onChange={(e) => setSetupPinValue(e.target.value.replace(/\D/g, ""))}
+                className="mt-1.5"
+              />
+            </div>
+
+            <DialogFooter className="mt-6 flex flex-row justify-end gap-2 border-t pt-4">
+              <Button type="button" variant="outline" className="cursor-pointer flex-1 sm:flex-none" onClick={handleLogout}>
+                Sign Out
+              </Button>
+              <Button type="submit" variant="hero" className="cursor-pointer flex-1 sm:flex-none" disabled={submittingSetupPin}>
+                {submittingSetupPin ? "Saving..." : "Set Security PIN"}
               </Button>
             </DialogFooter>
           </form>

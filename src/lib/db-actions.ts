@@ -7,6 +7,18 @@ import { generateReceiptId } from "./receipt-utils";
 const generateId = (prefix: string) => prefix + "-" + Math.floor(1000 + Math.random() * 9000);
 const REQUIRED_VENDOR_IMPORT_HEADERS = ["name", "shop", "phone", "section"] as const;
 
+export async function writeAuditLog(orgId: string | null, userEmail: string | null, action: string, details: string) {
+  try {
+    await pool.query(
+      `INSERT INTO audit_logs (org_id, user_email, action, details)
+       VALUES ($1, $2, $3, $4)`,
+      [orgId, userEmail, action, details]
+    );
+  } catch (err) {
+    console.error("Failed to write audit log:", err);
+  }
+}
+
 function parseCSVLine(line: string) {
   const values: string[] = [];
   let current = "";
@@ -1078,7 +1090,8 @@ export const getVendorPortal = createServerFn({ method: "POST" })
           orgId: vendor.org_id,
           orgName: orgName,
           orgType: orgType,
-          email: email
+          email: email,
+          withdrawalPinSet: !!vendor.withdrawal_pin
         },
         duesCategories: duesRes.rows.map(d => ({
           id: d.id,
@@ -1859,6 +1872,8 @@ export const updateOrganization = createServerFn({ method: "POST" })
       [sanitizedName, sanitizedType, capacity, sanitizedPhone, sanitizedAddress, dailySummary, smsReceipts, weeklyReport, underpaymentAlerts, data.id]
     );
 
+    await writeAuditLog(data.id, null, "Update Settings", `Updated organization settings/profile details for association "${sanitizedName}"`);
+
     return { success: true, org: res.rows[0] };
   });
 
@@ -2125,7 +2140,8 @@ export const completeVendorOnboarding = createServerFn({ method: "POST" })
   .validator(z.object({
     vendorId: z.string(),
     email: z.string().email(),
-    password: z.string().min(6)
+    password: z.string().min(6),
+    withdrawalPin: z.string().length(4)
   }))
   .handler(async ({ data }) => {
     const vendorRes = await pool.query("SELECT * FROM vendors WHERE id = $1 LIMIT 1", [data.vendorId]);
@@ -2144,6 +2160,13 @@ export const completeVendorOnboarding = createServerFn({ method: "POST" })
       [data.email.toLowerCase(), data.password, "vendor", vendor.org_id, vendor.name, true]
     );
 
+    await pool.query(
+      "UPDATE vendors SET email = $1, withdrawal_pin = $2 WHERE id = $3",
+      [data.email.toLowerCase(), data.withdrawalPin, data.vendorId]
+    );
+
+    await writeAuditLog(vendor.org_id, data.email, "Vendor Onboarding", `Vendor "${vendor.name}" completed onboarding and set their withdrawal PIN.`);
+
     return {
       success: true,
       user: {
@@ -2154,6 +2177,38 @@ export const completeVendorOnboarding = createServerFn({ method: "POST" })
         org_type: "Member"
       }
     };
+  });
+
+// Setup/Update Vendor Withdrawal PIN
+export const setVendorWithdrawalPin = createServerFn({ method: "POST" })
+  .validator(z.object({
+    vendorId: z.string(),
+    email: z.string().email(),
+    sessionToken: z.string(),
+    pin: z.string().length(4)
+  }))
+  .handler(async ({ data }) => {
+    const authRes = await pool.query(
+      "SELECT role FROM users WHERE LOWER(email) = $1 AND session_token = $2 LIMIT 1",
+      [data.email.toLowerCase(), data.sessionToken]
+    );
+    if (authRes.rowCount === 0) {
+      return { success: false, error: "Unauthorized session. Please log in again." };
+    }
+    
+    const vendorRes = await pool.query("SELECT org_id, name FROM vendors WHERE id = $1 LIMIT 1", [data.vendorId]);
+    if (vendorRes.rowCount === 0) {
+      return { success: false, error: "Member profile not found" };
+    }
+    const vendor = vendorRes.rows[0];
+
+    await pool.query(
+      "UPDATE vendors SET email = $1, withdrawal_pin = $2 WHERE id = $3",
+      [data.email.toLowerCase(), data.pin, data.vendorId]
+    );
+
+    await writeAuditLog(vendor.org_id, data.email, "Set Withdrawal PIN", `Vendor "${vendor.name}" initialized/updated their 4-digit transaction PIN.`);
+    return { success: true };
   });
 
 // Newsletter Subscription API
@@ -2684,7 +2739,8 @@ export const submitWithdrawalRequest = createServerFn({ method: "POST" })
     bankName: z.string(),
     accountNumber: z.string(),
     email: z.string().email(),
-    sessionToken: z.string()
+    sessionToken: z.string(),
+    pin: z.string().length(4)
   }))
   .handler(async ({ data }) => {
     // Validate session
@@ -2696,15 +2752,41 @@ export const submitWithdrawalRequest = createServerFn({ method: "POST" })
       return { success: false, error: "Unauthorized session. Please log in again." };
     }
 
-    const vendorRes = await pool.query("SELECT name, shop, phone, paid, email FROM vendors WHERE id = $1", [data.vendorId]);
+    const vendorRes = await pool.query("SELECT name, shop, phone, paid, email, withdrawal_pin FROM vendors WHERE id = $1", [data.vendorId]);
     if (!vendorRes.rowCount) {
-      return { success: false, error: "Member not found" };
+      return { success: false, error: "Member profile not found" };
     }
     const vendor = vendorRes.rows[0];
+
+    // Validate security PIN
+    if (!vendor.withdrawal_pin || vendor.withdrawal_pin !== data.pin) {
+      return { success: false, error: "Invalid transaction security PIN" };
+    }
 
     // Verify requesting email matches vendor's email
     if (vendor.email && vendor.email.toLowerCase() !== data.email.toLowerCase()) {
       return { success: false, error: "Unauthorized vendor account mismatch" };
+    }
+
+    // Enforce Single request limit (₦100,000)
+    if (data.amount > 100000) {
+      return { success: false, error: "Withdrawal amount exceeds single request limit of ₦100,000" };
+    }
+
+    // Enforce Daily cumulative limit (₦250,000)
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const dailySumRes = await pool.query(
+      `SELECT COALESCE(SUM(amount), 0) as total 
+       FROM withdrawals 
+       WHERE vendor_id = $1 
+         AND created_at >= $2 
+         AND status != 'rejected'`,
+      [data.vendorId, todayStart]
+    );
+    const dailySum = parseFloat(dailySumRes.rows[0].total || "0");
+    if (dailySum + data.amount > 250000) {
+      return { success: false, error: `Daily withdrawal limit of ₦250,000 exceeded. You have already requested ₦${dailySum.toLocaleString()} today.` };
     }
 
     // Verify balance
@@ -2747,6 +2829,14 @@ export const submitWithdrawalRequest = createServerFn({ method: "POST" })
       "vendor",
       "Withdrawal Logged",
       `Your withdrawal request of ₦${data.amount.toLocaleString()} to ${data.bankName} (${data.accountNumber}) is pending administrator approval.`
+    );
+
+    // Write audit log
+    await writeAuditLog(
+      data.orgId,
+      data.email,
+      "Submit Withdrawal",
+      `Requested withdrawal of ₦${data.amount.toLocaleString()} to ${data.bankName} (${data.accountNumber}) [ID: ${withdrawalId}]`
     );
 
     return { success: true };
@@ -2962,6 +3052,13 @@ export const approveWithdrawalRequest = createServerFn({ method: "POST" })
       "vendor",
       "Withdrawal Approved",
       `Your withdrawal of ₦${amount.toLocaleString()} has been approved and transferred to your bank account.`
+    );
+
+    await writeAuditLog(
+      vendor.org_id,
+      data.adminEmail,
+      "Approve Withdrawal",
+      `Approved withdrawal of ₦${amount.toLocaleString()} for vendor "${vendor.name}" (ID: ${vendor.id}) to ${rawBank} (${destinationAccount}) [Txn ID: ${txnId}]`
     );
 
     return { success: true };

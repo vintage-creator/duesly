@@ -34,6 +34,7 @@ async function main() {
   const client = await pool.connect();
   try {
     console.log("Dropping tables if they exist...");
+    await client.query("DROP TABLE IF EXISTS audit_logs CASCADE;");
     await client.query("DROP TABLE IF EXISTS notifications CASCADE;");
     await client.query("DROP TABLE IF EXISTS users CASCADE;");
     await client.query("DROP TABLE IF EXISTS receipts CASCADE;");
@@ -86,7 +87,21 @@ async function main() {
         virtual_account VARCHAR(100) NOT NULL,
         due NUMERIC(12,2) NOT NULL DEFAULT 0,
         paid NUMERIC(12,2) NOT NULL DEFAULT 0,
-        status VARCHAR(50) NOT NULL DEFAULT 'unpaid'
+        status VARCHAR(50) NOT NULL DEFAULT 'unpaid',
+        email VARCHAR(255) DEFAULT NULL,
+        withdrawal_pin VARCHAR(4) DEFAULT NULL
+      );
+    `);
+
+    await client.query(`
+      CREATE TABLE audit_logs (
+        id SERIAL PRIMARY KEY,
+        org_id VARCHAR(50) REFERENCES organizations(id) ON DELETE SET NULL,
+        user_email VARCHAR(255),
+        action VARCHAR(255) NOT NULL,
+        details TEXT,
+        ip_address VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
