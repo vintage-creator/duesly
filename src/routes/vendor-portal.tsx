@@ -130,6 +130,7 @@ function Page() {
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
   const selectedReceiptLink = selectedReceipt && typeof window !== "undefined" ? `${window.location.origin}/receipts/${selectedReceipt.id}` : "";
   const canCompleteOnboarding = isLookupOnly && !vendor?.email;
+  const hasAuthenticatedVendorSession = !!vendor && !isLookupOnly;
 
   const formatSignedNaira = (amount: number) => {
     const numericAmount = Number(amount) || 0;
@@ -170,7 +171,7 @@ function Page() {
   };
 
   const fetchNotis = () => {
-    if (vendor) {
+    if (hasAuthenticatedVendorSession) {
       getNotifications({
         data: {
           role: "vendor",
@@ -187,7 +188,12 @@ function Page() {
   };
 
   useEffect(() => {
-    if (!vendor) return;
+    if (!hasAuthenticatedVendorSession) {
+      setActiveNotis([]);
+      setUnreadCount(0);
+      setNotiOpen(false);
+      return;
+    }
     
     fetchNotis();
 
@@ -223,7 +229,7 @@ function Page() {
               n.title.toLowerCase().includes("refund")
             );
             if (hasReconciled) {
-              const query = localStorage.getItem("user") ? (JSON.parse(localStorage.getItem("user")!).email || JSON.parse(localStorage.getItem("user")!).name) : sessionStorage.getItem("vendorLookupQuery");
+              const query = localStorage.getItem("user") ? (JSON.parse(localStorage.getItem("user")!).email || JSON.parse(localStorage.getItem("user")!).name) : null;
               if (query) {
                 getVendorPortal({ data: { searchQuery: query } }).then(freshData => {
                   if (freshData.success && freshData.vendor) {
@@ -244,7 +250,7 @@ function Page() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [vendor, notiOpen]);
+  }, [hasAuthenticatedVendorSession, vendor?.id, notiOpen]);
 
   const handleMarkRead = async (id: string) => {
     try {
@@ -374,9 +380,12 @@ function Page() {
     const localUser = localStorage.getItem("user");
     const savedLookup = sessionStorage.getItem("vendorLookupQuery");
     
-    if (localUser || savedLookup) {
+    const parsed = localUser ? JSON.parse(localUser) : null;
+    const isVendorSession = parsed && parsed.role === "vendor";
+
+    if (isVendorSession || savedLookup) {
       setLoading(true);
-      const query = localUser ? (JSON.parse(localUser).email || JSON.parse(localUser).name) : savedLookup;
+      const query = isVendorSession ? (parsed.email || parsed.name) : savedLookup;
       getVendorPortal({ data: { searchQuery: query } })
         .then((res) => {
           if (res.success && res.vendor) {
@@ -384,9 +393,9 @@ function Page() {
             setDuesCategories(res.duesCategories || []);
             setPayments(res.payments || []);
             setReceipts(res.receipts || []);
-            setIsLookupOnly(!localUser);
+            setIsLookupOnly(!isVendorSession);
           } else {
-            if (localUser) {
+            if (isVendorSession) {
               localStorage.removeItem("user");
               sessionStorage.clear();
               toast.error("Your session has expired. Please sign in again.");
@@ -396,7 +405,7 @@ function Page() {
         })
         .catch((err) => {
           console.error(err);
-          if (localUser) {
+          if (isVendorSession) {
             localStorage.removeItem("user");
             sessionStorage.clear();
             navigate({ to: "/login" });
@@ -697,27 +706,6 @@ function Page() {
     };
   });
 
-  const notificationsList = [
-    ...(outstanding > 0 ? [{
-      id: "alert-1",
-      title: "Levy Overdue Notice",
-      message: `Your outstanding dues of ${formatNaira(outstanding)} are overdue. Please transfer to your dedicated payment account number.`,
-      date: "Today"
-    }] : []),
-    ...(receipts.length > 0 ? [{
-      id: "alert-2",
-      title: "Payment Reconciled",
-      message: `Your payment of ${formatNaira(receipts[0].amount)} was matched and receipt ${receipts[0].id} was dispatched.`,
-      date: receipts[0].date
-    }] : []),
-    {
-      id: "alert-3",
-      title: "Association Announcement",
-      message: "Monthly dues coordination holds this Friday at the main secretariat by 4:00 PM.",
-      date: "Yesterday"
-    }
-  ];
-
   return (
     <div className="min-h-screen bg-gradient-soft">
       <header className="sticky top-0 z-50 border-b border-border bg-background/85 backdrop-blur-md">
@@ -730,6 +718,7 @@ function Page() {
             </div>
 
             {/* Notification Bell Dropdown */}
+            {hasAuthenticatedVendorSession && (
             <div className="relative">
               <Button variant="ghost" size="icon" className="relative cursor-pointer" onClick={() => setNotiOpen(!notiOpen)}>
                 <Bell className="h-4 w-4 text-navy" />
@@ -777,6 +766,7 @@ function Page() {
                 </div>
               )}
             </div>
+            )}
 
             {!isLookupOnly ? (
               <>
@@ -790,9 +780,9 @@ function Page() {
               </>
             ) : (
               <>
-                <Link to="/login">
+                <Link to="/signup">
                   <Button variant="outline" size="sm" className="cursor-pointer text-xs rounded-xl h-9 px-4 font-semibold text-navy hover:bg-secondary">
-                    Sign In
+                    Create your own account
                   </Button>
                 </Link>
                 <Button variant="ghost" className="text-slate-500 hover:text-rose-600 hover:bg-rose-50/50 cursor-pointer h-9 px-3 rounded-xl gap-2 font-medium" onClick={handleLogout}>
@@ -877,9 +867,13 @@ function Page() {
         {isLookupOnly && (
           <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-xs text-blue-800 flex items-center justify-between gap-4 shadow-sm animate-fade-in">
             <p className="font-sans leading-relaxed">
-              <strong>Read-Only Lookup Mode:</strong> You are viewing payments and compliance status. Payout withdrawals and credentials setup require signing in securely.
+              <strong>Read-Only Lookup Mode:</strong> You are viewing payments and compliance status. Payout withdrawals require signing in securely.
+              <span className="hidden sm:inline"> Collect dues for your own organization? Get started today.</span>
             </p>
-            <Link to="/login" className="font-semibold underline hover:text-blue-900 shrink-0">Sign In</Link>
+            <div className="flex gap-3 shrink-0">
+              <Link to="/login" className="font-semibold underline hover:text-blue-900">Sign In</Link>
+              <Link to="/signup" className="font-semibold underline hover:text-blue-900">Create Account</Link>
+            </div>
           </div>
         )}
 
