@@ -4,6 +4,16 @@ import { z } from "zod";
 import { askGeminiCoach } from "./gemini";
 import { generateReceiptId } from "./receipt-utils";
 
+export function getAppBaseUrl() {
+  if (process.env.APP_URL) {
+    return process.env.APP_URL.replace(/\/$/, "");
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL.replace(/\/$/, "")}`;
+  }
+  return "http://localhost:3000";
+}
+
 const generateId = (prefix: string) => prefix + "-" + Math.floor(1000 + Math.random() * 9000);
 const REQUIRED_VENDOR_IMPORT_HEADERS = ["name", "shop", "phone", "section"] as const;
 
@@ -818,7 +828,7 @@ export const createOrganization = createServerFn({ method: "POST" })
               
               <div style="background-color: #f8fafc; padding: 18px; border-radius: 8px; border: 1px solid #edf2f7; margin: 20px 0;">
                 <h4 style="margin-top: 0; color: #0b1a3a;">Your Login Credentials:</h4>
-                <p style="margin: 4px 0; font-size: 14px;"><strong>Admin Portal URL:</strong> <a href="http://localhost:3000/login">duesly.app/login</a></p>
+                 <p style="margin: 4px 0; font-size: 14px;"><strong>Admin Portal URL:</strong> <a href="${getAppBaseUrl()}/login">duesly.app/login</a></p>
                 <p style="margin: 4px 0; font-size: 14px;"><strong>Username/Email:</strong> ${data.adminEmail}</p>
                 <p style="margin: 4px 0; font-size: 14px;"><strong>Temporary Password:</strong> ${data.adminPassword}</p>
                 <p style="margin: 12px 0 0 0; font-size: 12px; color: #e11d48;">⚠️ <em>For security, please change your password in settings upon first login.</em></p>
@@ -1785,7 +1795,7 @@ export const forgotPassword = createServerFn({ method: "POST" })
     const user = res.rows[0];
     
     // Dispatch real email with reset instructions
-    const resetUrl = `http://localhost:3000/login?reset_email=${encodeURIComponent(user.email)}`;
+    const resetUrl = `${getAppBaseUrl()}/login?reset_email=${encodeURIComponent(user.email)}`;
     await sendEmail({
       to: user.email,
       subject: "Password Reset Request — Duesly",
