@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/duesly/status-badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatNaira, formatNumber } from "@/lib/sample-data";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, AlertCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { getSuperAdminData, createOrganization, updateOrgStatus, updateOrganization, deleteOrganization } from "@/lib/db-actions";
@@ -41,6 +41,8 @@ function Page() {
   const [editType, setEditType] = useState("Market");
   const [editCapacity, setEditCapacity] = useState("100");
   const [savingEdit, setSavingEdit] = useState(false);
+  const [decommissionConfirmOpen, setDecommissionConfirmOpen] = useState(false);
+  const [decommissioningId, setDecommissioningId] = useState<string | null>(null);
 
   const list = organizations.filter((o) => o.name.toLowerCase().includes(q.toLowerCase()));
 
@@ -83,21 +85,9 @@ function Page() {
     }
   };
 
-  const handleDeleteOrg = async (id: string) => {
-    if (!confirm("Are you absolutely sure you want to decommission this organization? This will permanently delete all associated users, members, and transactions. This action CANNOT be undone.")) {
-      return;
-    }
-    try {
-      const res = await deleteOrganization({ data: { id } });
-      if (res.success) {
-        toast.success("Organization successfully decommissioned and deleted!");
-        setManageDialogOpen(false);
-        router.invalidate();
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Error deleting organization");
-    }
+  const triggerDecommission = (id: string) => {
+    setDecommissioningId(id);
+    setDecommissionConfirmOpen(true);
   };
 
   const handleOnboard = async (e: React.FormEvent) => {
@@ -364,7 +354,7 @@ function Page() {
                   type="button" 
                   variant="outline" 
                   className="sm:mr-auto text-destructive border-destructive/20 hover:bg-destructive/10 hover:text-destructive cursor-pointer"
-                  onClick={() => handleDeleteOrg(selectedOrg.id)}
+                  onClick={() => triggerDecommission(selectedOrg.id)}
                 >
                   Decommission Org
                 </Button>
@@ -378,6 +368,54 @@ function Page() {
                 </div>
               </DialogFooter>
             </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {decommissionConfirmOpen && decommissioningId && (
+        <Dialog open={decommissionConfirmOpen} onOpenChange={setDecommissionConfirmOpen}>
+          <DialogContent className="max-w-md rounded-2xl border border-border bg-card p-6 shadow-elevated animate-fade-in-up">
+            <DialogHeader>
+              <DialogTitle className="font-display font-bold text-destructive text-lg">Decommission Organization?</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-muted-foreground leading-relaxed font-sans">
+                Are you absolutely sure you want to decommission this organization? This will permanently delete all associated users, members, and transactions.
+              </p>
+              <div className="rounded-xl bg-destructive/10 border border-destructive/20 p-3 text-xs text-destructive flex items-start gap-2.5 font-sans">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold">Warning: Destructive Action</p>
+                  <p className="mt-0.5 leading-relaxed">This action cannot be undone. All active dedicated payment accounts and data loops will be permanently destroyed.</p>
+                </div>
+              </div>
+            </div>
+            <DialogFooter className="mt-6 flex flex-row gap-2 justify-end">
+              <Button type="button" variant="ghost" onClick={() => setDecommissionConfirmOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                type="button" 
+                variant="destructive" 
+                className="cursor-pointer"
+                onClick={async () => {
+                  try {
+                    const res = await deleteOrganization({ data: { id: decommissioningId } });
+                    if (res.success) {
+                      toast.success("Organization successfully decommissioned and deleted!");
+                      setDecommissionConfirmOpen(false);
+                      setManageDialogOpen(false);
+                      router.invalidate();
+                    }
+                  } catch (err) {
+                    console.error(err);
+                    toast.error("Error deleting organization");
+                  }
+                }}
+              >
+                Yes, Decommission
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
