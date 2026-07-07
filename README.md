@@ -77,5 +77,6 @@ npm run build
     *   **Cooperative Admin (Trans-Amadi Cooperative)**:
         *   *Email*: `admin@transamadi.org`
         *   *Password*: `password`
-*   **Member/Vendor Portal Lookup Search**:
-    *   *Search Term*: `Aisha Bello` or `+234 811 220 0098`
+*   **Member / Resident / Vendor Portal (Lookup Access)**:
+    *   *URL*: [Duesly Pay Member Portal](https://dueslypay.vercel.app/vendor-portal) (This single portal dynamically adjusts its styling and labels for residents, cooperative members, trade unions, and vendors depending on their association).
+    *   *Search Lookup Query*: `Aisha Bello` or `07065737817` (Enter this in the lookup field to view read-only lookup mode, which disables withdrawal buttons for public searches).

@@ -244,7 +244,7 @@ async function main() {
     console.log("Seeding vendors...");
     const vendorsList = [
       { id: "V-1042", org_id: "ORG-001", name: "Chinedu Okafor", shop: "B-12", phone: "+234 803 412 9087", section: "Textile Line", virtual_account: "9032 4410 88", due: 18000, paid: 18000, status: "paid" },
-      { id: "V-1043", org_id: "ORG-001", name: "Aisha Bello", shop: "C-04", phone: "+234 811 220 0098", section: "Provisions", virtual_account: "9032 4410 89", due: 18000, paid: 10000, status: "partial" },
+      { id: "V-1043", org_id: "ORG-001", name: "Aisha Bello", shop: "C-04", phone: "07065737817", section: "Provisions", virtual_account: "9032 4410 89", due: 18000, paid: 10000, status: "partial" },
       { id: "V-1044", org_id: "ORG-001", name: "Emeka Nwosu", shop: "A-21", phone: "+234 802 119 6633", section: "Electronics", virtual_account: "9032 4410 90", due: 24000, paid: 0, status: "unpaid" },
       { id: "V-1045", org_id: "ORG-001", name: "Funmi Adeyemi", shop: "D-09", phone: "+234 805 720 1144", section: "Cosmetics", virtual_account: "9032 4410 91", due: 18000, paid: 22000, status: "overpaid" },
       { id: "V-1046", org_id: "ORG-001", name: "Ibrahim Musa", shop: "E-17", phone: "+234 706 553 8821", section: "Grains", virtual_account: "9032 4410 92", due: 15000, paid: 15000, status: "paid" },
