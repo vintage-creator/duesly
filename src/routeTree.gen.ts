@@ -10,11 +10,14 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VendorPortalRouteImport } from './routes/vendor-portal'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SuperAdminRouteImport } from './routes/super-admin'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as ContactRouteImport } from './routes/contact'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SuperAdminIndexRouteImport } from './routes/super-admin.index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard.index'
@@ -22,16 +25,26 @@ import { Route as SuperAdminTransactionsRouteImport } from './routes/super-admin
 import { Route as SuperAdminSettingsRouteImport } from './routes/super-admin.settings'
 import { Route as SuperAdminReportsRouteImport } from './routes/super-admin.reports'
 import { Route as SuperAdminOrganizationsRouteImport } from './routes/super-admin.organizations'
+import { Route as SolutionsTradeGroupsRouteImport } from './routes/solutions.trade-groups'
+import { Route as SolutionsMarketsRouteImport } from './routes/solutions.markets'
+import { Route as SolutionsEstatesRouteImport } from './routes/solutions.estates'
+import { Route as SolutionsCooperativesRouteImport } from './routes/solutions.cooperatives'
 import { Route as DashboardVendorsRouteImport } from './routes/dashboard.vendors'
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard.settings'
 import { Route as DashboardReportsRouteImport } from './routes/dashboard.reports'
 import { Route as DashboardReceiptsRouteImport } from './routes/dashboard.receipts'
 import { Route as DashboardPaymentsRouteImport } from './routes/dashboard.payments'
 import { Route as DashboardDuesRouteImport } from './routes/dashboard.dues'
+import { Route as ApiWebhookRouteImport } from './routes/api.webhook'
 
 const VendorPortalRoute = VendorPortalRouteImport.update({
   id: '/vendor-portal',
   path: '/vendor-portal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SuperAdminRoute = SuperAdminRouteImport.update({
@@ -42,6 +55,11 @@ const SuperAdminRoute = SuperAdminRouteImport.update({
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -57,6 +75,11 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -94,6 +117,26 @@ const SuperAdminOrganizationsRoute = SuperAdminOrganizationsRouteImport.update({
   path: '/organizations',
   getParentRoute: () => SuperAdminRoute,
 } as any)
+const SolutionsTradeGroupsRoute = SolutionsTradeGroupsRouteImport.update({
+  id: '/solutions/trade-groups',
+  path: '/solutions/trade-groups',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SolutionsMarketsRoute = SolutionsMarketsRouteImport.update({
+  id: '/solutions/markets',
+  path: '/solutions/markets',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SolutionsEstatesRoute = SolutionsEstatesRouteImport.update({
+  id: '/solutions/estates',
+  path: '/solutions/estates',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SolutionsCooperativesRoute = SolutionsCooperativesRouteImport.update({
+  id: '/solutions/cooperatives',
+  path: '/solutions/cooperatives',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardVendorsRoute = DashboardVendorsRouteImport.update({
   id: '/vendors',
   path: '/vendors',
@@ -124,21 +167,34 @@ const DashboardDuesRoute = DashboardDuesRouteImport.update({
   path: '/dues',
   getParentRoute: () => DashboardRoute,
 } as any)
+const ApiWebhookRoute = ApiWebhookRouteImport.update({
+  id: '/api/webhook',
+  path: '/api/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/privacy': typeof PrivacyRoute
   '/signup': typeof SignupRoute
   '/super-admin': typeof SuperAdminRouteWithChildren
+  '/terms': typeof TermsRoute
   '/vendor-portal': typeof VendorPortalRoute
+  '/api/webhook': typeof ApiWebhookRoute
   '/dashboard/dues': typeof DashboardDuesRoute
   '/dashboard/payments': typeof DashboardPaymentsRoute
   '/dashboard/receipts': typeof DashboardReceiptsRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/vendors': typeof DashboardVendorsRoute
+  '/solutions/cooperatives': typeof SolutionsCooperativesRoute
+  '/solutions/estates': typeof SolutionsEstatesRoute
+  '/solutions/markets': typeof SolutionsMarketsRoute
+  '/solutions/trade-groups': typeof SolutionsTradeGroupsRoute
   '/super-admin/organizations': typeof SuperAdminOrganizationsRoute
   '/super-admin/reports': typeof SuperAdminReportsRoute
   '/super-admin/settings': typeof SuperAdminSettingsRoute
@@ -148,16 +204,24 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/contact': typeof ContactRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/privacy': typeof PrivacyRoute
   '/signup': typeof SignupRoute
+  '/terms': typeof TermsRoute
   '/vendor-portal': typeof VendorPortalRoute
+  '/api/webhook': typeof ApiWebhookRoute
   '/dashboard/dues': typeof DashboardDuesRoute
   '/dashboard/payments': typeof DashboardPaymentsRoute
   '/dashboard/receipts': typeof DashboardReceiptsRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/vendors': typeof DashboardVendorsRoute
+  '/solutions/cooperatives': typeof SolutionsCooperativesRoute
+  '/solutions/estates': typeof SolutionsEstatesRoute
+  '/solutions/markets': typeof SolutionsMarketsRoute
+  '/solutions/trade-groups': typeof SolutionsTradeGroupsRoute
   '/super-admin/organizations': typeof SuperAdminOrganizationsRoute
   '/super-admin/reports': typeof SuperAdminReportsRoute
   '/super-admin/settings': typeof SuperAdminSettingsRoute
@@ -168,18 +232,26 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/privacy': typeof PrivacyRoute
   '/signup': typeof SignupRoute
   '/super-admin': typeof SuperAdminRouteWithChildren
+  '/terms': typeof TermsRoute
   '/vendor-portal': typeof VendorPortalRoute
+  '/api/webhook': typeof ApiWebhookRoute
   '/dashboard/dues': typeof DashboardDuesRoute
   '/dashboard/payments': typeof DashboardPaymentsRoute
   '/dashboard/receipts': typeof DashboardReceiptsRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/vendors': typeof DashboardVendorsRoute
+  '/solutions/cooperatives': typeof SolutionsCooperativesRoute
+  '/solutions/estates': typeof SolutionsEstatesRoute
+  '/solutions/markets': typeof SolutionsMarketsRoute
+  '/solutions/trade-groups': typeof SolutionsTradeGroupsRoute
   '/super-admin/organizations': typeof SuperAdminOrganizationsRoute
   '/super-admin/reports': typeof SuperAdminReportsRoute
   '/super-admin/settings': typeof SuperAdminSettingsRoute
@@ -191,18 +263,26 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/contact'
     | '/dashboard'
     | '/forgot-password'
     | '/login'
+    | '/privacy'
     | '/signup'
     | '/super-admin'
+    | '/terms'
     | '/vendor-portal'
+    | '/api/webhook'
     | '/dashboard/dues'
     | '/dashboard/payments'
     | '/dashboard/receipts'
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/vendors'
+    | '/solutions/cooperatives'
+    | '/solutions/estates'
+    | '/solutions/markets'
+    | '/solutions/trade-groups'
     | '/super-admin/organizations'
     | '/super-admin/reports'
     | '/super-admin/settings'
@@ -212,16 +292,24 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/contact'
     | '/forgot-password'
     | '/login'
+    | '/privacy'
     | '/signup'
+    | '/terms'
     | '/vendor-portal'
+    | '/api/webhook'
     | '/dashboard/dues'
     | '/dashboard/payments'
     | '/dashboard/receipts'
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/vendors'
+    | '/solutions/cooperatives'
+    | '/solutions/estates'
+    | '/solutions/markets'
+    | '/solutions/trade-groups'
     | '/super-admin/organizations'
     | '/super-admin/reports'
     | '/super-admin/settings'
@@ -231,18 +319,26 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/contact'
     | '/dashboard'
     | '/forgot-password'
     | '/login'
+    | '/privacy'
     | '/signup'
     | '/super-admin'
+    | '/terms'
     | '/vendor-portal'
+    | '/api/webhook'
     | '/dashboard/dues'
     | '/dashboard/payments'
     | '/dashboard/receipts'
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/vendors'
+    | '/solutions/cooperatives'
+    | '/solutions/estates'
+    | '/solutions/markets'
+    | '/solutions/trade-groups'
     | '/super-admin/organizations'
     | '/super-admin/reports'
     | '/super-admin/settings'
@@ -253,12 +349,20 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ContactRoute: typeof ContactRoute
   DashboardRoute: typeof DashboardRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
+  PrivacyRoute: typeof PrivacyRoute
   SignupRoute: typeof SignupRoute
   SuperAdminRoute: typeof SuperAdminRouteWithChildren
+  TermsRoute: typeof TermsRoute
   VendorPortalRoute: typeof VendorPortalRoute
+  ApiWebhookRoute: typeof ApiWebhookRoute
+  SolutionsCooperativesRoute: typeof SolutionsCooperativesRoute
+  SolutionsEstatesRoute: typeof SolutionsEstatesRoute
+  SolutionsMarketsRoute: typeof SolutionsMarketsRoute
+  SolutionsTradeGroupsRoute: typeof SolutionsTradeGroupsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -268,6 +372,13 @@ declare module '@tanstack/react-router' {
       path: '/vendor-portal'
       fullPath: '/vendor-portal'
       preLoaderRoute: typeof VendorPortalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/super-admin': {
@@ -282,6 +393,13 @@ declare module '@tanstack/react-router' {
       path: '/signup'
       fullPath: '/signup'
       preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -303,6 +421,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -354,6 +479,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SuperAdminOrganizationsRouteImport
       parentRoute: typeof SuperAdminRoute
     }
+    '/solutions/trade-groups': {
+      id: '/solutions/trade-groups'
+      path: '/solutions/trade-groups'
+      fullPath: '/solutions/trade-groups'
+      preLoaderRoute: typeof SolutionsTradeGroupsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/solutions/markets': {
+      id: '/solutions/markets'
+      path: '/solutions/markets'
+      fullPath: '/solutions/markets'
+      preLoaderRoute: typeof SolutionsMarketsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/solutions/estates': {
+      id: '/solutions/estates'
+      path: '/solutions/estates'
+      fullPath: '/solutions/estates'
+      preLoaderRoute: typeof SolutionsEstatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/solutions/cooperatives': {
+      id: '/solutions/cooperatives'
+      path: '/solutions/cooperatives'
+      fullPath: '/solutions/cooperatives'
+      preLoaderRoute: typeof SolutionsCooperativesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/vendors': {
       id: '/dashboard/vendors'
       path: '/vendors'
@@ -395,6 +548,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/dues'
       preLoaderRoute: typeof DashboardDuesRouteImport
       parentRoute: typeof DashboardRoute
+    }
+    '/api/webhook': {
+      id: '/api/webhook'
+      path: '/api/webhook'
+      fullPath: '/api/webhook'
+      preLoaderRoute: typeof ApiWebhookRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -445,12 +605,20 @@ const SuperAdminRouteWithChildren = SuperAdminRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ContactRoute: ContactRoute,
   DashboardRoute: DashboardRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
+  PrivacyRoute: PrivacyRoute,
   SignupRoute: SignupRoute,
   SuperAdminRoute: SuperAdminRouteWithChildren,
+  TermsRoute: TermsRoute,
   VendorPortalRoute: VendorPortalRoute,
+  ApiWebhookRoute: ApiWebhookRoute,
+  SolutionsCooperativesRoute: SolutionsCooperativesRoute,
+  SolutionsEstatesRoute: SolutionsEstatesRoute,
+  SolutionsMarketsRoute: SolutionsMarketsRoute,
+  SolutionsTradeGroupsRoute: SolutionsTradeGroupsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

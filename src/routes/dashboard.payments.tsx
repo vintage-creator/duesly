@@ -1,25 +1,82 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
 import { OrgShell } from "./dashboard";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/duesly/status-badge";
-import { reconciliation, formatNaira } from "@/lib/sample-data";
-import { ArrowDownLeft, ArrowUpRight, AlertTriangle, Check } from "lucide-react";
+import { formatNaira } from "@/lib/sample-data";
+import { ArrowDownLeft, ArrowUpRight, AlertTriangle, Check, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { getReconciliations, resolveReconciliation } from "@/lib/db-actions";
 
 export const Route = createFileRoute("/dashboard/payments")({
+  loader: async () => {
+    return await getReconciliations();
+  },
   head: () => ({ meta: [{ title: "Payments & Reconciliation — Duesly" }] }),
   component: Page,
 });
 
 function Page() {
-  const matched = reconciliation.filter((r) => r.status === "matched").length;
-  const over = reconciliation.filter((r) => r.status === "overpaid").length;
-  const under = reconciliation.filter((r) => r.status === "underpaid").length;
-  const review = reconciliation.filter((r) => r.status === "review").length;
+  const reconciliation = Route.useLoaderData();
+  const router = useRouter();
+
+  const [activeOrgId, setActiveOrgId] = useState("ORG-001");
+  const [reconciliationList, setReconciliationList] = useState(reconciliation);
+
+  useEffect(() => {
+    const localUser = localStorage.getItem("user");
+    if (localUser) {
+      const parsed = JSON.parse(localUser);
+      if (parsed.org_id && parsed.org_id !== "ORG-001") {
+        setActiveOrgId(parsed.org_id);
+        getReconciliations({ data: { orgId: parsed.org_id } })
+          .then(setReconciliationList)
+          .catch(console.error);
+      }
+    }
+  }, [reconciliation]);
+
+  const matched = reconciliationList.filter((r) => r.status === "matched").length;
+  const over = reconciliationList.filter((r) => r.status === "overpaid").length;
+  const under = reconciliationList.filter((r) => r.status === "underpaid").length;
+  const review = reconciliationList.filter((r) => r.status === "review").length;
+
+  const handleManualMatch = async (id: string) => {
+    const vendorName = window.prompt("Enter the exact Vendor Name to match this payment to (e.g. Chinedu Okafor, Aisha Bello, Emeka Nwosu):");
+    if (!vendorName) return;
+
+    try {
+      const res = await resolveReconciliation({ data: { id, action: "matched", vendorName, orgId: activeOrgId } });
+      if (res.success) {
+        toast.success(`Payment matched successfully to ${vendorName}!`);
+        getReconciliations({ data: { orgId: activeOrgId } }).then(setReconciliationList).catch(console.error);
+        router.invalidate();
+      } else {
+        toast.error("Could not find a vendor with that name.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error matching payment.");
+    }
+  };
+
+  const handleApplyCredit = async (id: string) => {
+    try {
+      const res = await resolveReconciliation({ data: { id, action: "matched", orgId: activeOrgId } });
+      if (res.success) {
+        toast.success("Overpayment credit applied to vendor's next cycle balance!");
+        getReconciliations({ data: { orgId: activeOrgId } }).then(setReconciliationList).catch(console.error);
+        router.invalidate();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error applying credit.");
+    }
+  };
 
   return (
     <OrgShell title="Payments & Reconciliation" subtitle="Every inflow, matched to the right vendor and category."
-      actions={<Button variant="outline" onClick={() => toast.success("Manual reconciliation refreshed")}>Refresh feed</Button>}
+      actions={<Button variant="outline" onClick={() => { router.invalidate(); toast.success("Manual reconciliation refreshed"); }}><RefreshCw className="mr-2 h-4 w-4" /> Refresh feed</Button>}
     >
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Tile icon={<Check className="h-5 w-5" />} label="Matched" value={matched} accent="emerald" />
@@ -48,7 +105,7 @@ function Page() {
               </tr>
             </thead>
             <tbody>
-              {reconciliation.map((r) => (
+              {reconciliationList.map((r) => (
                 <tr key={r.id} className="border-t border-border hover:bg-secondary/40">
                   <td className="px-5 py-3 font-mono text-xs">{r.id}</td>
                   <td className="px-5 py-3 font-mono text-xs">{r.source}</td>
@@ -61,17 +118,24 @@ function Page() {
                   <td className="px-5 py-3"><StatusBadge status={r.status} /></td>
                   <td className="px-5 py-3 text-right">
                     {r.status === "review" ? (
-                      <Button size="sm" variant="navy" onClick={() => toast.success("Sent to manual review")}>Review</Button>
+                      <Button size="sm" variant="navy" onClick={() => handleManualMatch(r.id)}>Match</Button>
                     ) : r.status === "overpaid" ? (
-                      <Button size="sm" variant="outline" onClick={() => toast.success("Credit applied to next cycle")}>Apply credit</Button>
+                      <Button size="sm" variant="outline" onClick={() => handleApplyCredit(r.id)}>Apply credit</Button>
                     ) : r.status === "underpaid" ? (
-                      <Button size="sm" variant="outline" onClick={() => toast.success("Reminder sent")}>Remind</Button>
+                      <Button size="sm" variant="outline" onClick={() => toast.success(`Reminder sent to ${r.vendor}`)}>Remind</Button>
                     ) : (
-                      <Button size="sm" variant="ghost" onClick={() => toast.success("Receipt re-issued")}>Receipt</Button>
+                      <Button size="sm" variant="ghost" onClick={() => toast.success(`Receipt re-sent to ${r.vendor}`)}>Receipt</Button>
                     )}
                   </td>
                 </tr>
               ))}
+              {reconciliationList.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-5 py-12 text-center text-muted-foreground">
+                    No transactions found in feed.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

@@ -1,8 +1,8 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import {
   LayoutDashboard, Building2, Users, Receipt, FileBarChart2, Settings, CreditCard,
-  Wallet, Bell, Menu, X, Search, LogOut,
+  Wallet, Bell, Menu, X, Search, LogOut, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DueslyLogo } from "./logo";
@@ -29,44 +29,97 @@ interface DashboardShellProps {
 export function DashboardShell({ nav, title, subtitle, role, user, children, actions }: DashboardShellProps) {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const [open, setOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [notiOpen, setNotiOpen] = useState(false);
   const bottomNav = nav.slice(0, 5);
+
+  const adminNotifications = [
+    { id: "1", title: "Nomba Auto-Reconciliation", message: "Nomba auto-matched 12 bank transfers this morning.", time: "2h ago" },
+    { id: "2", title: "Compliance Warning", message: "3 vendors have levies overdue by more than 30 days.", time: "1d ago" },
+    { id: "3", title: "Setup Checklist", message: "Connect your payout account to automate weekly payouts.", time: "2d ago" }
+  ];
+
+  const superAdminNotifications = [
+    { id: "1", title: "Performance Milestone", message: "Weekly transaction volume has exceeded ₦12.4M across all organizations.", time: "4h ago" },
+    { id: "2", title: "Security audit", message: "Platform admin credentials were updated successfully.", time: "1d ago" },
+    { id: "3", title: "Nomba Gateway Status", message: "Nomba virtual account routing channels are fully operational.", time: "3d ago" }
+  ];
+
+  const activeNotis = role === "Super Admin" || role === "admin" ? superAdminNotifications : adminNotifications;
+
+  useEffect(() => {
+    const val = localStorage.getItem("sidebar_collapsed") === "true";
+    setIsCollapsed(val);
+  }, []);
+
+  const toggleCollapse = () => {
+    setIsCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("sidebar_collapsed", String(next));
+      return next;
+    });
+  };
+
+  const displayRole = role;
 
   return (
     <div className="min-h-screen bg-gradient-soft">
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-sidebar text-sidebar-foreground lg:flex">
-        <div className="flex h-16 items-center border-b border-sidebar-border px-6">
-          <DueslyLogo light />
+      <aside className={cn(
+        "fixed inset-y-0 left-0 z-30 hidden flex-col bg-sidebar text-sidebar-foreground lg:flex transition-all duration-300 border-r border-sidebar-border/40",
+        isCollapsed ? "w-16" : "w-64"
+      )}>
+        {/* Toggle Button */}
+        <button
+          onClick={toggleCollapse}
+          type="button"
+          className="absolute top-20 -right-3 z-40 hidden lg:grid h-6 w-6 place-items-center rounded-full border border-sidebar-border bg-sidebar hover:bg-sidebar-accent text-sidebar-foreground shadow-soft transition-transform duration-300 cursor-pointer"
+        >
+          {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+        </button>
+
+        <div className={cn("flex h-16 items-center border-b border-sidebar-border transition-all duration-300", isCollapsed ? "px-3.5 justify-center" : "px-6")}>
+          <DueslyLogo light collapsed={isCollapsed} />
         </div>
-        <div className="px-4 pt-4 pb-2">
-          <div className="rounded-xl border border-sidebar-border bg-sidebar-accent/60 p-3">
-            <p className="text-[11px] uppercase tracking-wider text-sidebar-foreground/60">{role}</p>
-            <p className="mt-0.5 truncate text-sm font-semibold">{user.name}</p>
+        <div className={cn("pt-4 pb-2 transition-all duration-300", isCollapsed ? "px-2" : "px-4")}>
+          <div className={cn("rounded-xl border border-sidebar-border bg-sidebar-accent/60 transition-all duration-300", isCollapsed ? "p-1.5 text-center flex items-center justify-center h-10" : "p-3")}>
+            {isCollapsed ? (
+              <span className="font-bold text-xs uppercase text-emerald" title={displayRole}>{displayRole.charAt(0)}</span>
+            ) : (
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-sidebar-foreground/60">{displayRole}</p>
+                <p className="mt-0.5 truncate text-sm font-semibold">{user.name}</p>
+              </div>
+            )}
           </div>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-3">
           {nav.map((item) => {
-            const active = path === item.to || (item.to !== "/" && path.startsWith(item.to));
+            const active = item.to === "/super-admin" || item.to === "/dashboard"
+              ? path === item.to
+              : path === item.to || path.startsWith(item.to + "/");
             return (
               <Link
                 key={item.to}
                 to={item.to}
                 className={cn(
-                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-xl py-2.5 text-sm font-medium transition-all duration-300",
+                  isCollapsed ? "px-2 justify-center" : "px-3",
                   active
                     ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-emerald"
                     : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                 )}
+                title={isCollapsed ? item.label : undefined}
               >
-                <span className="grid h-5 w-5 place-items-center">{item.icon}</span>
-                {item.label}
+                <span className="grid h-5 w-5 place-items-center shrink-0">{item.icon}</span>
+                {!isCollapsed && <span>{item.label}</span>}
               </Link>
             );
           })}
         </nav>
         <div className="border-t border-sidebar-border p-3">
-          <Link to="/login" onClick={() => toast.success("Signed out")} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent">
-            <LogOut className="h-4 w-4" /> Sign out
+          <Link to="/login" onClick={() => toast.success("Signed out")} className={cn("flex items-center gap-2 rounded-xl py-2.5 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent transition-all duration-300", isCollapsed ? "justify-center px-1" : "px-3")}>
+            <LogOut className="h-4 w-4 shrink-0" /> {!isCollapsed && <span>Sign out</span>}
           </Link>
         </div>
       </aside>
@@ -82,7 +135,9 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
             </div>
             <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
               {nav.map((item) => {
-                const active = path === item.to || (item.to !== "/" && path.startsWith(item.to));
+                const active = item.to === "/super-admin" || item.to === "/dashboard"
+                  ? path === item.to
+                  : path === item.to || path.startsWith(item.to + "/");
                 return (
                   <Link key={item.to} to={item.to} onClick={() => setOpen(false)}
                     className={cn(
@@ -100,7 +155,7 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
       )}
 
       {/* Main */}
-      <div className="lg:pl-64">
+      <div className={cn("transition-all duration-300", isCollapsed ? "lg:pl-16" : "lg:pl-64")}>
         <header className="sticky top-0 z-20 border-b border-border/60 bg-background/80 backdrop-blur-md">
           <div className="flex h-16 items-center gap-3 px-4 sm:px-6">
             <button onClick={() => setOpen(true)} className="rounded-lg p-2 hover:bg-secondary lg:hidden">
@@ -110,10 +165,43 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input placeholder="Search vendors, payments, receipts..." className="pl-9 bg-secondary/60 border-transparent focus-visible:bg-background" />
             </div>
-            <div className="ml-auto flex items-center gap-2">
-              <Button variant="ghost" size="icon" onClick={() => toast.info("No new notifications")}>
-                <Bell className="h-5 w-5" />
-              </Button>
+            <div className="ml-auto flex items-center gap-2 relative">
+              <div className="relative">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="relative cursor-pointer" 
+                  onClick={() => setNotiOpen(!notiOpen)}
+                >
+                  <Bell className="h-5 w-5 text-navy" />
+                  <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive ring-2 ring-background animate-pulse" />
+                </Button>
+                {notiOpen && (
+                  <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-border bg-card p-3 shadow-elevated z-50 text-left text-xs animate-fade-in-up">
+                    <div className="flex items-center justify-between border-b border-border/60 pb-2 mb-2">
+                      <p className="font-bold text-navy">Platform Alerts</p>
+                      <button 
+                        className="text-[10px] text-emerald hover:underline font-semibold cursor-pointer" 
+                        onClick={() => { 
+                          toast.success("All notifications marked as read"); 
+                          setNotiOpen(false); 
+                        }}
+                      >
+                        Mark read
+                      </button>
+                    </div>
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                      {activeNotis.map(n => (
+                        <div key={n.id} className="border-b border-border/60 pb-2 last:border-0 last:pb-0">
+                          <p className="font-semibold text-navy text-[11px]">{n.title}</p>
+                          <p className="text-muted-foreground text-[10px] mt-0.5 leading-relaxed">{n.message}</p>
+                          <p className="text-[8px] text-muted-foreground/60 mt-1">{n.time}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="grid h-9 w-9 place-items-center rounded-full bg-gradient-emerald text-sm font-semibold text-white shadow-emerald">
                 {user.initials}
               </div>
@@ -137,7 +225,9 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-md lg:hidden">
         <div className="grid grid-cols-5">
           {bottomNav.map((item) => {
-            const active = path === item.to || (item.to !== "/" && path.startsWith(item.to));
+            const active = item.to === "/super-admin" || item.to === "/dashboard"
+              ? path === item.to
+              : path === item.to || path.startsWith(item.to + "/");
             return (
               <Link key={item.to} to={item.to} className={cn(
                 "flex flex-col items-center gap-1 px-2 py-2.5 text-[11px] font-medium transition-colors",

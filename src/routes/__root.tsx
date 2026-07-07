@@ -83,14 +83,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Duesly is a virtual-account-powered dues, levy, and payment reconciliation platform for markets, estates, cooperatives, and trade groups.",
+          "Duesly is a dedicated-account-powered dues, levy, and payment reconciliation platform for markets, estates, cooperatives, and trade groups.",
       },
       { name: "author", content: "Duesly" },
       { property: "og:title", content: "Duesly — Trusted Collections for Associations" },
       {
         property: "og:description",
         content:
-          "Unique virtual accounts, auto reconciliation, receipts, and reports — built for serious collections.",
+          "Dedicated bank accounts, auto reconciliation, receipts, and reports — built for serious collections.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -103,6 +103,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap",
       },
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      { rel: "apple-touch-icon", href: "/icon.svg" },
       { rel: "manifest", href: "/manifest.webmanifest" },
     ],
   }),
@@ -128,6 +130,17 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker
+          .register("/sw.js")
+          .then((reg) => console.log("Service Worker registered successfully:", reg.scope))
+          .catch((err) => console.error("Service Worker registration failed:", err));
+      });
+    }
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
