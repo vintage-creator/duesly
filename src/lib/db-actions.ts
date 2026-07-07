@@ -1568,3 +1568,34 @@ export const shareVendorReceipts = createServerFn({ method: "POST" })
 
     return { success: true, count };
   });
+
+export const submitSupportTicket = createServerFn({ method: "POST" })
+  .validator(z.object({
+    vendorId: z.string(),
+    orgId: z.string()
+  }))
+  .handler(async ({ data }) => {
+    const vendorRes = await pool.query("SELECT name, shop, phone FROM vendors WHERE id = $1", [data.vendorId]);
+    if (!vendorRes.rowCount) {
+      return { success: false, error: "Member not found" };
+    }
+    const vendor = vendorRes.rows[0];
+
+    await createNotification(
+      data.orgId,
+      null,
+      "admin",
+      "Support Request",
+      `Member "${vendor.name}" (Shop ${vendor.shop}) has opened a support ticket. Phone: ${vendor.phone}.`
+    );
+
+    await createNotification(
+      data.orgId,
+      data.vendorId,
+      "vendor",
+      "Support Ticket Logged",
+      "Your support request has been logged successfully. The administrator has been notified."
+    );
+
+    return { success: true };
+  });
