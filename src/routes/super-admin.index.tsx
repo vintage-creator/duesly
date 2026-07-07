@@ -51,7 +51,7 @@ function Page() {
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 rounded-2xl border bg-card p-5 shadow-soft">
           <h3 className="font-display text-lg font-bold text-navy">Platform-wide collections</h3>
-          <p className="text-sm text-muted-foreground">Across all Duesly-powered associations (₦M)</p>
+          <p className="text-sm text-muted-foreground">Across all Duesly-powered associations {stats.suffix ? `(₦${stats.suffix})` : "(₦)"}</p>
           <div className="mt-4 h-72">
             {stats.totalOrgs === 0 || trend.length === 0 || isTrendEmpty ? (
               <div className="h-full flex flex-col items-center justify-center border border-dashed rounded-2xl bg-secondary/5 text-center p-6">

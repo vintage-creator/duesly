@@ -643,6 +643,18 @@ export const getSuperAdminData = createServerFn({ method: "GET" })
     const allVendorsRes = await pool.query("SELECT SUM(due) as sum FROM vendors");
     const totalExpectedAll = parseFloat(allVendorsRes.rows[0].sum || "0");
 
+    // Dynamic scale divisor and suffix based on collections
+    let divisor = 1;
+    let suffix = "";
+    const maxVal = Math.max(totalCollected, totalExpectedAll);
+    if (maxVal >= 1000000) {
+      divisor = 1000000;
+      suffix = "M";
+    } else if (maxVal >= 1000) {
+      divisor = 1000;
+      suffix = "K";
+    }
+
     // Dynamic 6-month platform-wide trend
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const currentMonthIdx = new Date().getMonth();
@@ -655,8 +667,8 @@ export const getSuperAdminData = createServerFn({ method: "GET" })
       if (idx === currentMonthIdx) {
         trend.push({
           month: monthName,
-          collected: Number((totalCollected / 1000000).toFixed(3)),
-          expected: Number((totalExpectedAll / 1000000).toFixed(3))
+          collected: Number((totalCollected / divisor).toFixed(2)),
+          expected: Number((totalExpectedAll / divisor).toFixed(2))
         });
       } else {
         trend.push({
@@ -672,7 +684,8 @@ export const getSuperAdminData = createServerFn({ method: "GET" })
         totalOrgs,
         totalMembers,
         totalCollected,
-        activeOrgs
+        activeOrgs,
+        suffix: suffix
       },
       organizations: orgsRes.rows.map(o => ({
         id: o.id,
