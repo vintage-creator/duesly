@@ -4,7 +4,7 @@ Duesly is a premium, secure levy collection and automated reconciliation platfor
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
 *   **Dedicated Payment Accounts**: Automatic assignment of unique payment coordinates to members (assigned bank accounts for instant bank transfer tracking).
 *   **Gated Multi-Tenant Dashboards**:
@@ -18,7 +18,7 @@ Duesly is a premium, secure levy collection and automated reconciliation platfor
 
 ---
 
-## 🛠️ Technology Stack
+## Technology Stack
 
 *   **Framework**: [TanStack Start](https://tanstack.com/router/v1/docs/start/overview) (React SSR + Type-safe routing)
 *   **Database**: PostgreSQL
@@ -28,7 +28,7 @@ Duesly is a premium, secure levy collection and automated reconciliation platfor
 
 ---
 
-## 💻 Getting Started
+## Getting Started
 
 ### 1. Prerequisites
 Ensure you have **Node.js** and **PostgreSQL** running locally. Create a `.env` file at the root:
@@ -62,11 +62,8 @@ npm run build
 
 ---
 
-## 🔑 Demo Login Accounts
+## Demo Login Accounts
 
-*   **Platform Super Admin**:
-    *   *Email*: `chuksy3@gmail.com`
-    *   *Password*: `Duesly7817##**`
 *   **Organization Admin (Ariaria Market Association)**:
     *   *Email*: `admin@ariaria.org`
     *   *Password*: `password`
