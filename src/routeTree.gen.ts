@@ -25,6 +25,7 @@ import { Route as SuperAdminTransactionsRouteImport } from './routes/super-admin
 import { Route as SuperAdminSettingsRouteImport } from './routes/super-admin.settings'
 import { Route as SuperAdminReportsRouteImport } from './routes/super-admin.reports'
 import { Route as SuperAdminOrganizationsRouteImport } from './routes/super-admin.organizations'
+import { Route as SuperAdminAccountsRouteImport } from './routes/super-admin.accounts'
 import { Route as SolutionsTradeGroupsRouteImport } from './routes/solutions.trade-groups'
 import { Route as SolutionsMarketsRouteImport } from './routes/solutions.markets'
 import { Route as SolutionsEstatesRouteImport } from './routes/solutions.estates'
@@ -118,6 +119,11 @@ const SuperAdminOrganizationsRoute = SuperAdminOrganizationsRouteImport.update({
   path: '/organizations',
   getParentRoute: () => SuperAdminRoute,
 } as any)
+const SuperAdminAccountsRoute = SuperAdminAccountsRouteImport.update({
+  id: '/accounts',
+  path: '/accounts',
+  getParentRoute: () => SuperAdminRoute,
+} as any)
 const SolutionsTradeGroupsRoute = SolutionsTradeGroupsRouteImport.update({
   id: '/solutions/trade-groups',
   path: '/solutions/trade-groups',
@@ -202,6 +208,7 @@ export interface FileRoutesByFullPath {
   '/solutions/estates': typeof SolutionsEstatesRoute
   '/solutions/markets': typeof SolutionsMarketsRoute
   '/solutions/trade-groups': typeof SolutionsTradeGroupsRoute
+  '/super-admin/accounts': typeof SuperAdminAccountsRoute
   '/super-admin/organizations': typeof SuperAdminOrganizationsRoute
   '/super-admin/reports': typeof SuperAdminReportsRoute
   '/super-admin/settings': typeof SuperAdminSettingsRoute
@@ -230,6 +237,7 @@ export interface FileRoutesByTo {
   '/solutions/estates': typeof SolutionsEstatesRoute
   '/solutions/markets': typeof SolutionsMarketsRoute
   '/solutions/trade-groups': typeof SolutionsTradeGroupsRoute
+  '/super-admin/accounts': typeof SuperAdminAccountsRoute
   '/super-admin/organizations': typeof SuperAdminOrganizationsRoute
   '/super-admin/reports': typeof SuperAdminReportsRoute
   '/super-admin/settings': typeof SuperAdminSettingsRoute
@@ -261,6 +269,7 @@ export interface FileRoutesById {
   '/solutions/estates': typeof SolutionsEstatesRoute
   '/solutions/markets': typeof SolutionsMarketsRoute
   '/solutions/trade-groups': typeof SolutionsTradeGroupsRoute
+  '/super-admin/accounts': typeof SuperAdminAccountsRoute
   '/super-admin/organizations': typeof SuperAdminOrganizationsRoute
   '/super-admin/reports': typeof SuperAdminReportsRoute
   '/super-admin/settings': typeof SuperAdminSettingsRoute
@@ -293,6 +302,7 @@ export interface FileRouteTypes {
     | '/solutions/estates'
     | '/solutions/markets'
     | '/solutions/trade-groups'
+    | '/super-admin/accounts'
     | '/super-admin/organizations'
     | '/super-admin/reports'
     | '/super-admin/settings'
@@ -321,6 +331,7 @@ export interface FileRouteTypes {
     | '/solutions/estates'
     | '/solutions/markets'
     | '/solutions/trade-groups'
+    | '/super-admin/accounts'
     | '/super-admin/organizations'
     | '/super-admin/reports'
     | '/super-admin/settings'
@@ -351,6 +362,7 @@ export interface FileRouteTypes {
     | '/solutions/estates'
     | '/solutions/markets'
     | '/solutions/trade-groups'
+    | '/super-admin/accounts'
     | '/super-admin/organizations'
     | '/super-admin/reports'
     | '/super-admin/settings'
@@ -492,6 +504,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SuperAdminOrganizationsRouteImport
       parentRoute: typeof SuperAdminRoute
     }
+    '/super-admin/accounts': {
+      id: '/super-admin/accounts'
+      path: '/accounts'
+      fullPath: '/super-admin/accounts'
+      preLoaderRoute: typeof SuperAdminAccountsRouteImport
+      parentRoute: typeof SuperAdminRoute
+    }
     '/solutions/trade-groups': {
       id: '/solutions/trade-groups'
       path: '/solutions/trade-groups'
@@ -604,6 +623,7 @@ const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
 )
 
 interface SuperAdminRouteChildren {
+  SuperAdminAccountsRoute: typeof SuperAdminAccountsRoute
   SuperAdminOrganizationsRoute: typeof SuperAdminOrganizationsRoute
   SuperAdminReportsRoute: typeof SuperAdminReportsRoute
   SuperAdminSettingsRoute: typeof SuperAdminSettingsRoute
@@ -612,6 +632,7 @@ interface SuperAdminRouteChildren {
 }
 
 const SuperAdminRouteChildren: SuperAdminRouteChildren = {
+  SuperAdminAccountsRoute: SuperAdminAccountsRoute,
   SuperAdminOrganizationsRoute: SuperAdminOrganizationsRoute,
   SuperAdminReportsRoute: SuperAdminReportsRoute,
   SuperAdminSettingsRoute: SuperAdminSettingsRoute,

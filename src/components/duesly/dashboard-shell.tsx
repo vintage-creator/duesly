@@ -527,6 +527,7 @@ export function DashboardShell({ nav, title, subtitle, role, user, children, act
               className="cursor-pointer flex-1 bg-rose-600 text-white hover:bg-rose-700 text-xs font-semibold" 
               onClick={() => {
                 localStorage.removeItem("user");
+                sessionStorage.removeItem("vendorLookupQuery");
                 toast.success("Signed out successfully");
                 setSignOutDialogOpen(false);
                 setTimeout(() => {
@@ -557,6 +558,7 @@ export const superAdminNav: NavItem[] = [
   { label: "Overview", to: "/super-admin", icon: <LayoutDashboard className="h-4 w-4" /> },
   { label: "Organizations", to: "/super-admin/organizations", icon: <Building2 className="h-4 w-4" /> },
   { label: "Transactions", to: "/super-admin/transactions", icon: <ArrowLeftRight className="h-4 w-4" /> },
+  { label: "Accounts", to: "/super-admin/accounts", icon: <Users className="h-4 w-4" /> },
   { label: "Reports", to: "/super-admin/reports", icon: <FileBarChart2 className="h-4 w-4" /> },
   { label: "Settings", to: "/super-admin/settings", icon: <Settings className="h-4 w-4" /> },
 ];

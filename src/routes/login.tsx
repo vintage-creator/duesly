@@ -27,6 +27,9 @@ function Login() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
+    if (search?.email) {
+      setEmail(search.email);
+    }
     if (search?.reset_email) {
       setEmail(search.reset_email);
       setIsResetFlow(true);

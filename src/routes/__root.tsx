@@ -178,6 +178,7 @@ function RootComponent() {
 
     const handleLogout = () => {
       localStorage.removeItem("user");
+      sessionStorage.removeItem("vendorLookupQuery");
       setShowTimeoutWarning(false);
       clearInterval(checkInterval);
       clearInterval(countdownInterval);
@@ -260,6 +261,7 @@ function RootComponent() {
               className="cursor-pointer w-full sm:w-auto"
               onClick={() => {
                 localStorage.removeItem("user");
+                sessionStorage.removeItem("vendorLookupQuery");
                 setShowTimeoutWarning(false);
                 router.navigate({ to: "/login" });
               }}

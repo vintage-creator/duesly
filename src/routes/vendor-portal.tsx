@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { DueslyLogo } from "@/components/duesly/logo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -47,6 +47,7 @@ type ReceiptInfo = {
 };
 
 function Page() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(() => {
     if (typeof window !== "undefined") {
@@ -123,6 +124,7 @@ function Page() {
   const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
   const selectedReceiptLink = selectedReceipt && typeof window !== "undefined" ? `${window.location.origin}/receipts/${selectedReceipt.id}` : "";
+  const canCompleteOnboarding = isLookupOnly && !vendor?.email;
 
   const formatSignedNaira = (amount: number) => {
     const numericAmount = Number(amount) || 0;
@@ -368,9 +370,23 @@ function Page() {
             setPayments(res.payments || []);
             setReceipts(res.receipts || []);
             setIsLookupOnly(!localUser);
+          } else {
+            if (localUser) {
+              localStorage.removeItem("user");
+              sessionStorage.clear();
+              toast.error("Your session has expired. Please sign in again.");
+              navigate({ to: "/login" });
+            }
           }
         })
-        .catch(console.error)
+        .catch((err) => {
+          console.error(err);
+          if (localUser) {
+            localStorage.removeItem("user");
+            sessionStorage.clear();
+            navigate({ to: "/login" });
+          }
+        })
         .finally(() => setLoading(false));
     }
   }, []);
@@ -383,6 +399,12 @@ function Page() {
     try {
       const res = await getVendorPortal({ data: { searchQuery } });
       if (res.success && res.vendor) {
+        if (res.vendor.email && searchQuery.includes("@")) {
+          sessionStorage.removeItem("vendorLookupQuery");
+          toast.info("This vendor portal already has a secure login. Please sign in again.");
+          navigate({ to: "/login", search: { email: res.vendor.email } as any });
+          return;
+        }
         sessionStorage.setItem("vendorLookupQuery", searchQuery);
         setVendor(res.vendor as any);
         setDuesCategories(res.duesCategories || []);
@@ -702,7 +724,7 @@ function Page() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-        {isLookupOnly && (
+        {canCompleteOnboarding && (
           <div className="mb-6 rounded-2xl border border-emerald/20 bg-emerald/5 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-sm animate-fade-in-up">
             <div className="space-y-1">
               <h4 className="font-bold text-navy text-sm flex items-center gap-1.5">

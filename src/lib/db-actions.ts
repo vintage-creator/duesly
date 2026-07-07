@@ -1372,6 +1372,150 @@ export async function createNombaVirtualAccount(vendorName: string, shopNumber: 
   return accountNumber;
 }
 
+function getNested(source: any, paths: string[]) {
+  for (const path of paths) {
+    const value = path.split(".").reduce((current, key) => current?.[key], source);
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  return undefined;
+}
+
+function normalizeNombaAccountRecord(record: any) {
+  const accountNumber = String(getNested(record, [
+    "accountNumber",
+    "account_number",
+    "virtualAccountNumber",
+    "virtual_account_number",
+    "bankAccountNumber",
+    "bank_account_number",
+    "nuban",
+    "account.number",
+    "bankAccount.accountNumber",
+  ]) || "").replace(/\s+/g, "");
+
+  if (!accountNumber) return null;
+
+  return {
+    accountNumber,
+    accountName: String(getNested(record, ["accountName", "account_name", "name", "customer.name", "bankAccount.accountName"]) || ""),
+    bankName: String(getNested(record, ["bankName", "bank_name", "bank", "bank.name"]) || "Nomba MFB"),
+    reference: String(getNested(record, ["reference", "merchantTxRef", "merchant_tx_ref", "id", "accountReference"]) || ""),
+    status: String(getNested(record, ["status", "state"]) || "active"),
+    createdAt: String(getNested(record, ["createdAt", "created_at", "dateCreated"]) || ""),
+    raw: record,
+  };
+}
+
+export const getNombaVirtualAccountsAudit = createServerFn({ method: "POST" })
+  .validator(z.object({
+    adminEmail: z.string().email(),
+    sessionToken: z.string()
+  }))
+  .handler(async ({ data }) => {
+    const callerRes = await pool.query(
+      "SELECT role FROM users WHERE LOWER(email) = $1 AND session_token = $2 LIMIT 1",
+      [data.adminEmail.toLowerCase(), data.sessionToken]
+    );
+    if (!callerRes.rowCount || callerRes.rows[0].role !== "super-admin") {
+      return { success: false, error: "Only an active super-admin session can retrieve Nomba account records." };
+    }
+
+    const parentAccountId = process.env.NOMBA_PARENT_ACCOUNT_ID;
+    if (!parentAccountId) {
+      return { success: false, error: "NOMBA_PARENT_ACCOUNT_ID is not configured." };
+    }
+
+    const accessToken = await getNombaAccessToken();
+    const baseUrl = "https://api.nomba.com";
+    const endpoints = [
+      { path: "/v1/accounts/virtual/list", method: "POST", body: {} },
+      { path: "/v1/accounts/virtual", method: "GET" },
+      { path: "/v1/virtual-accounts", method: "GET" },
+      { path: "/v1/accounts/virtual-accounts", method: "GET" },
+      { path: "/v2/accounts/virtual", method: "GET" },
+      { path: "/v2/virtual-accounts", method: "GET" },
+    ];
+
+    let lastError = "";
+    let payload: any = null;
+    let sourceEndpoint = "";
+
+    for (const ep of endpoints) {
+      const res = await fetch(`${baseUrl}${ep.path}`, {
+        method: ep.method,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${accessToken}`,
+          "accountId": parentAccountId,
+        },
+        body: ep.body ? JSON.stringify(ep.body) : undefined
+      });
+
+      if (res.ok) {
+        payload = await res.json();
+        sourceEndpoint = ep.path;
+        break;
+      }
+
+      lastError = `${ep.path} (${ep.method}): ${res.status} ${await res.text()}`;
+    }
+
+    if (!payload) {
+      return {
+        success: false,
+        error: `Could not retrieve Nomba virtual accounts with the configured credentials. Last response: ${lastError || "unknown error"}`,
+      };
+    }
+
+    const records = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload.data)
+        ? payload.data
+        : Array.isArray(payload.data?.results)
+          ? payload.data.results
+          : Array.isArray(payload.data?.accounts)
+            ? payload.data.accounts
+            : Array.isArray(payload.results)
+              ? payload.results
+              : [];
+
+    const normalizedAccounts = records
+      .map(normalizeNombaAccountRecord)
+      .filter(Boolean) as Array<ReturnType<typeof normalizeNombaAccountRecord> & { accountNumber: string }>;
+
+    const localRes = await pool.query(
+      `SELECT v.id, v.name, v.shop, v.phone, v.section, v.virtual_account, v.org_id, o.name AS org_name
+       FROM vendors v
+       LEFT JOIN organizations o ON o.id = v.org_id`
+    );
+    const localByAccount = new Map(
+      localRes.rows.map((row) => [String(row.virtual_account || "").replace(/\s+/g, ""), row])
+    );
+
+    return {
+      success: true,
+      sourceEndpoint,
+      totalRemote: normalizedAccounts.length,
+      matched: normalizedAccounts.filter((account) => localByAccount.has(account.accountNumber)).length,
+      unmatched: normalizedAccounts.filter((account) => !localByAccount.has(account.accountNumber)).length,
+      accounts: normalizedAccounts.map((account) => {
+        const local = localByAccount.get(account.accountNumber);
+        return {
+          ...account,
+          localMatch: local ? {
+            vendorId: local.id,
+            vendorName: local.name,
+            shop: local.shop,
+            phone: local.phone,
+            section: local.section,
+            orgId: local.org_id,
+            orgName: local.org_name,
+          } : null,
+        };
+      }),
+    };
+  });
+
 // Bulk CSV Upload Onboarding
 export const importVendorsCSV = createServerFn({ method: "POST" })
   .validator(z.object({
