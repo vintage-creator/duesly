@@ -107,6 +107,7 @@ function Page() {
               visibility: visible;
             }
             #printable-ledger {
+              display: block !important;
               position: absolute;
               left: 0;
               top: 0;
