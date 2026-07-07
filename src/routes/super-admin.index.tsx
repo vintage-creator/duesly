@@ -21,6 +21,7 @@ export const Route = createFileRoute("/super-admin/")({
 function Page() {
   const { stats, organizations, trend } = Route.useLoaderData();
   const isTrendEmpty = (trend || []).every(t => t.collected === 0);
+  const activeRate = stats.totalOrgs > 0 ? Math.round((stats.activeOrgs / stats.totalOrgs) * 100) : 0;
 
   const [exporting, setExporting] = useState(false);
 
@@ -44,7 +45,7 @@ function Page() {
         <StatCard label="Organizations" value={formatNumber(stats.totalOrgs)} delta="+3 this quarter" trend="up" accent="navy" icon={<Building2 className="h-5 w-5" />} />
         <StatCard label="Vendors / Members" value={formatNumber(stats.totalMembers)} delta="Across all orgs" accent="info" icon={<Users className="h-5 w-5" />} />
         <StatCard label="Total collected" value={formatNaira(stats.totalCollected)} delta="+18.6% YoY" trend="up" accent="emerald" icon={<TrendingUp className="h-5 w-5" />} />
-        <StatCard label="Active organizations" value={`${stats.activeOrgs}/${stats.totalOrgs}`} delta={`${Math.round((stats.activeOrgs / stats.totalOrgs) * 100)}% active rate`} accent="gold" icon={<Activity className="h-5 w-5" />} />
+        <StatCard label="Active organizations" value={`${stats.activeOrgs}/${stats.totalOrgs}`} delta={`${activeRate}% active rate`} accent="gold" icon={<Activity className="h-5 w-5" />} />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">

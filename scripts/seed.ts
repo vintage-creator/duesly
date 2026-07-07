@@ -170,9 +170,10 @@ async function main() {
       { id: "ORG-002", name: "Lekki Phase 1 Estate", type: "Estate", status: "active", phone: "+234 809 111 2222", address: "Lekki, Lagos State", wallet_account: "9032 4400 02" },
       { id: "ORG-003", name: "Onitsha Main Market Union", type: "Market", status: "active", phone: "+234 806 333 4444", address: "Onitsha, Anambra State", wallet_account: "9032 4400 03" },
       { id: "ORG-004", name: "Trans-Amadi Cooperative", type: "Cooperative", status: "active", phone: "+234 805 555 6666", address: "Port Harcourt, Rivers State", wallet_account: "9032 4400 04" },
-      { id: "ORG-005", name: "Kano Leather Traders Assoc.", type: "Trade Group", status: "pending", phone: "+234 802 777 8888", address: "Kano, Kano State", wallet_account: "9032 4400 05" },
+      { id: "ORG-005", name: "Kano Leather Traders", type: "Trade Group", status: "pending", phone: "+234 802 777 8888", address: "Kano, Kano State", wallet_account: "9032 4400 05" },
       { id: "ORG-006", name: "Magodo Residents Forum", type: "Estate", status: "active", phone: "+234 803 999 0000", address: "Magodo, Lagos State", wallet_account: "9032 4400 06" },
       { id: "ORG-007", name: "Abia State Transport Union", type: "Trade Group", status: "suspended", phone: "+234 808 123 4567", address: "Umuahia, Abia State", wallet_account: "9032 4400 07" },
+      { id: "ORG-008", name: "Alaba International Market", type: "Market", status: "active", phone: "+234 807 456 1122", address: "Ojo, Lagos State", wallet_account: "9032 4400 08" },
     ];
 
     for (const org of orgs) {

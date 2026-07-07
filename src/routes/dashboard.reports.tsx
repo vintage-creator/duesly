@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { OrgShell } from "./dashboard";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatNaira, monthlyTrend } from "@/lib/sample-data";
 import { StatusBadge } from "@/components/duesly/status-badge";
@@ -34,10 +33,7 @@ function Page() {
   const [vendorsList, setVendorsList] = useState(vendors);
   const [hydrating, setHydrating] = useState(true);
   const today = new Date();
-  const currentMonthStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
-  const currentMonthEnd = today.toISOString().slice(0, 10);
-  const [startDate, setStartDate] = useState(currentMonthStart);
-  const [endDate, setEndDate] = useState(currentMonthEnd);
+  const reportDate = today.toLocaleDateString("en-NG");
 
   useEffect(() => {
     const localUser = localStorage.getItem("user");
@@ -78,7 +74,7 @@ function Page() {
     : vendorsList.filter((v: any) => v.section === selectedSection);
 
   const sections = Array.from(new Set(vendorsList.map((v: any) => v.section).filter(Boolean))).sort();
-  const reportScope = `${selectedSection === "all" ? "All sections" : selectedSection} · ${startDate} to ${endDate}`;
+  const reportScope = `${selectedSection === "all" ? "All sections" : selectedSection} · Live ledger as of ${reportDate}`;
 
   const handleExportPDFSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,11 +127,7 @@ function Page() {
   return (
     <OrgShell title="Reports" subtitle="Collection insights, compliance and exports."
       actions={
-        <>
-          <Input aria-label="Report start date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-40 bg-transparent border-border focus:ring-emerald hidden sm:block" />
-          <Input aria-label="Report end date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-40 bg-transparent border-border focus:ring-emerald hidden sm:block" />
-          <Button variant="hero" className="cursor-pointer" onClick={() => setExportDialogOpen(true)} disabled={vendorsList.length === 0}><Download className="h-4 w-4" /> Export PDF</Button>
-        </>
+        <Button variant="hero" className="cursor-pointer" onClick={() => setExportDialogOpen(true)} disabled={vendorsList.length === 0}><Download className="h-4 w-4" /> Export PDF</Button>
       }
     >
       <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">

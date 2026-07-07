@@ -194,7 +194,7 @@ function AnimatedReconciliationDemo() {
               <span className="h-2 w-2 rounded-full bg-white animate-pulse shrink-0" />
               <div>
                 <p className="font-bold">Signature verification success</p>
-                <p className="text-white/80">Headers matched NombaHackathon2026. Resolving ledger...</p>
+                <p className="text-white/80">Nomba signature verified. Resolving ledger...</p>
               </div>
             </div>
           )}
@@ -204,7 +204,7 @@ function AnimatedReconciliationDemo() {
               <Check className="h-3 w-3 shrink-0 text-white" />
               <div>
                 <p className="font-bold">Ledger matched & receipt dispatched</p>
-                <p className="text-white/85">Receipt RCP-8419 sent to chinedu.okafor@gmail.com via Resend.</p>
+                <p className="text-white/85">Receipt RCP-20260710-NMB84219 sent to chinedu.okafor@gmail.com via Resend.</p>
               </div>
             </div>
           )}
@@ -233,7 +233,7 @@ function AnimatedReconciliationDemo() {
                 <div className="rounded-xl bg-gradient-hero p-3.5 text-white shadow-soft">
                   <p className="text-[7px] uppercase tracking-wider text-white/70">Dedicated Account</p>
                   <p className="font-display font-bold text-sm mt-0.5 tracking-wide">9032 1249 84</p>
-                  <p className="text-[6px] text-white/60 mt-0.5">Wema Bank (Powered by Nomba)</p>
+                  <p className="text-[6px] text-white/60 mt-0.5">Nomba MFB Dedicated Account</p>
                 </div>
                 <div className="my-2 p-2 bg-secondary/50 rounded-xl border border-border/80 text-center">
                   <p className="text-[8px] text-muted-foreground">Sanitation Levy</p>
@@ -274,7 +274,7 @@ function AnimatedReconciliationDemo() {
                     <Check className="h-5 w-5" />
                   </div>
                   <h5 className="font-display font-bold text-navy text-xs">Payment Reconciled</h5>
-                  <p className="text-[7px] text-muted-foreground mt-0.5">Receipt RCP-8419 sent successfully.</p>
+                  <p className="text-[7px] text-muted-foreground mt-0.5">Receipt RCP-20260710-NMB84219 sent successfully.</p>
                 </div>
                 <div className="p-2 bg-emerald/5 border border-emerald/15 rounded-xl text-center my-1">
                   <p className="text-[6px] text-muted-foreground">Receipt Amount</p>
@@ -530,7 +530,7 @@ function Landing() {
               { num: "01", t: "Setup Association Profile", d: "Configure your association details. Input state branches, zones, and default levy sizes." },
               { num: "02", t: "Import Member Registry", d: "Upload a CSV or Excel file containing member names, shop/house coordinates, and contact details." },
               { num: "03", t: "Allocate Bank Accounts", d: "Each member is allocated a permanent dedicated bank account for all their dues, levies, and contributions." },
-              { num: "04", t: "Collect and Reconcile", d: "Members transfer to their NUBAN. Systems auto-reconcile, issuing receipts via Resend alerts." },
+              { num: "04", t: "Collect and Reconcile", d: "Members transfer to their Nomba MFB account. Duesly auto-reconciles and issues verified receipts." },
             ].map((step, idx) => (
               <div key={idx} className="relative rounded-2xl bg-secondary/30 p-6 border border-border shadow-soft group hover:bg-card transition-colors">
                 <span className="font-display text-4xl font-extrabold text-emerald/30 group-hover:text-emerald transition-colors">{step.num}</span>
@@ -648,8 +648,8 @@ function Landing() {
                 <div className="rounded-xl border border-white/5 bg-white/5 p-2.5 flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4 text-emerald shrink-0" />
                   <div className="text-[10px] text-left">
-                    <p className="font-bold text-white">PCI-DSS L1</p>
-                    <p className="text-[9px] text-white/50">Card industry standard</p>
+                    <p className="font-bold text-white">Webhook Verified</p>
+                    <p className="text-[9px] text-white/50">Signed payment events</p>
                   </div>
                 </div>
                 <div className="rounded-xl border border-white/5 bg-white/5 p-2.5 flex items-center gap-2">
@@ -662,7 +662,7 @@ function Landing() {
                 <div className="rounded-xl border border-white/5 bg-white/5 p-2.5 flex items-center gap-2">
                   <Users className="h-4 w-4 text-emerald shrink-0" />
                   <div className="text-[10px] text-left">
-                    <p className="font-bold text-white">Vintage Secured</p>
+                    <p className="font-bold text-white">Ledger Secured</p>
                     <p className="text-[9px] text-white/50">Admin signed logs</p>
                   </div>
                 </div>

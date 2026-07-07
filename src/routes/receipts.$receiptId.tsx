@@ -1,7 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CheckCircle2, FileText, Home, Printer, ShieldCheck } from "lucide-react";
+import { CheckCircle2, FileText, Home, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DueslyLogo } from "@/components/duesly/logo";
 import { getReceiptById } from "@/lib/db-actions";
+import { getReceiptVerificationCode } from "@/lib/receipt-utils";
 import { formatNaira } from "@/lib/sample-data";
 
 export const Route = createFileRoute("/receipts/$receiptId")({
@@ -19,6 +21,7 @@ export const Route = createFileRoute("/receipts/$receiptId")({
 
 function PublicReceiptPage() {
   const receipt = Route.useLoaderData();
+  const verificationCode = receipt ? getReceiptVerificationCode(receipt.id) : "";
 
   if (!receipt) {
     return (
@@ -45,17 +48,7 @@ function PublicReceiptPage() {
     <main className="min-h-screen bg-gradient-soft px-4 py-8 sm:py-12">
       <div className="mx-auto max-w-2xl">
         <div className="mb-5 flex items-center justify-between gap-3">
-          <Link to="/" className="inline-flex items-center gap-2 font-display text-lg font-bold text-navy">
-            <span className="relative grid h-9 w-9 place-items-center rounded-xl bg-gradient-emerald text-white shadow-emerald shrink-0">
-              <svg viewBox="0 0 24 24" className="h-4 w-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 7c4-4 12-4 16 0" />
-                <path d="M4 12c4-4 12-4 16 0" />
-                <path d="M4 17c4-4 12-4 16 0" />
-              </svg>
-              <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-gold ring-2 ring-background" />
-            </span>
-            Duesly
-          </Link>
+          <DueslyLogo />
           <Button variant="outline" size="sm" onClick={() => window.print()}>
             <Printer className="h-4 w-4" /> Print
           </Button>
@@ -81,16 +74,18 @@ function PublicReceiptPage() {
           </div>
 
           <div className="grid gap-px bg-border sm:grid-cols-2">
+            <Detail label="Receipt Reference" value={receipt.id} />
+            <Detail label="Verification Code" value={verificationCode} />
             <Detail label="Organization" value={receipt.orgName} />
             <Detail label="Payer" value={receipt.vendor} />
             <Detail label="Category" value={receipt.category} />
             <Detail label="Date" value={receipt.date} />
             <Detail label="Status" value={receipt.status} />
-            <Detail label="Organization Type" value={receipt.orgType} />
+            <Detail label="Payment Rail" value="Nomba MFB Virtual Account" />
           </div>
 
           <div className="bg-secondary/40 px-6 py-5 text-xs leading-relaxed text-muted-foreground sm:px-8">
-            This page confirms that the receipt reference above exists in Duesly's receipt registry. Keep the reference number for audit and reconciliation checks.
+            This page confirms that the receipt reference above exists in Duesly's receipt registry. Keep the reference number and verification code for audit and reconciliation checks.
           </div>
         </section>
       </div>

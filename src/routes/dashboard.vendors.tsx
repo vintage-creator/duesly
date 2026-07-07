@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/duesly/status-badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Filter, Copy, Phone, MapPin, Upload, LayoutGrid, List } from "lucide-react";
+import { Download, Plus, Search, Filter, Copy, Phone, MapPin, Upload, LayoutGrid, List } from "lucide-react";
 import { formatNaira } from "@/lib/sample-data";
 import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
@@ -56,6 +56,7 @@ function Page() {
   const [shop, setShop] = useState("");
   const [section, setSection] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importHelpOpen, setImportHelpOpen] = useState(false);
   const [orgPhone, setOrgPhone] = useState<string | null>("active");
   const [orgAddress, setOrgAddress] = useState<string | null>("active");
 
@@ -189,17 +190,18 @@ function Page() {
           
         router.invalidate();
       } else {
-        toast.error("Could not create vendor");
+        toast.error(res.error || "Could not create vendor");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast.error("Error creating vendor");
+      toast.error(err.message || "Error creating vendor");
     }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = "";
 
     const extension = file.name.split(".").pop()?.toLowerCase();
 
@@ -213,7 +215,7 @@ function Page() {
           router.invalidate();
           return `Successfully imported ${res.imported} vendors and registered Nomba virtual accounts!`;
         },
-        error: "Failed to import registry data.",
+        error: (err: any) => err.message || "Failed to import registry data.",
       });
     };
 
@@ -255,6 +257,19 @@ function Page() {
 
   const isProfileIncomplete = orgPhone === null || orgAddress === null;
 
+  const handleDownloadTemplate = () => {
+    const rows = [
+      ["name", "shop", "phone", "section"],
+      ["Ada Nwosu", "A-12", "+2348012345678", "Textile Line"],
+      ["Bala Musa", "B-08", "+2348098765432", "Provisions"]
+    ];
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    worksheet["!cols"] = [{ wch: 24 }, { wch: 16 }, { wch: 20 }, { wch: 24 }];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Members");
+    XLSX.writeFile(workbook, "duesly-member-import-template.xlsx");
+  };
+
   return (
     <OrgShell
       title={pluralLabel}
@@ -262,6 +277,54 @@ function Page() {
       actions={
         isProfileIncomplete ? undefined : (
           <>
+            <Dialog open={importHelpOpen} onOpenChange={setImportHelpOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="cursor-pointer">
+                  <Download className="h-4 w-4" /> Import template
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Bulk import format</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 text-sm">
+                  <p className="text-muted-foreground">
+                    Upload a CSV or Excel file with these required columns. Excel is recommended for admins because the columns are easier to review before upload, and the same headers work for CSV.
+                  </p>
+                  <p className="text-xs font-semibold text-emerald">
+                    Accepted formats: .xlsx, .xls, and .csv. The file is fully validated before any Nomba virtual accounts are provisioned.
+                  </p>
+                  <div className="overflow-hidden rounded-xl border">
+                    <table className="w-full text-xs">
+                      <thead className="bg-secondary text-left uppercase tracking-wider text-muted-foreground">
+                        <tr>
+                          <th className="px-3 py-2">Column</th>
+                          <th className="px-3 py-2">Example</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="border-t"><td className="px-3 py-2 font-mono">name</td><td className="px-3 py-2">Ada Nwosu</td></tr>
+                        <tr className="border-t"><td className="px-3 py-2 font-mono">shop</td><td className="px-3 py-2">A-12</td></tr>
+                        <tr className="border-t"><td className="px-3 py-2 font-mono">phone</td><td className="px-3 py-2">+2348012345678</td></tr>
+                        <tr className="border-t"><td className="px-3 py-2 font-mono">section</td><td className="px-3 py-2">Textile Line</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="rounded-xl bg-secondary/60 p-3 font-mono text-xs text-navy">
+                    name,shop,phone,section<br />
+                    Ada Nwosu,A-12,+2348012345678,Textile Line<br />
+                    Bala Musa,B-08,+2348098765432,Provisions
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setImportHelpOpen(false)}>Close</Button>
+                  <Button variant="hero" onClick={handleDownloadTemplate}>
+                    <Download className="h-4 w-4" /> Download Excel template
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
             <label className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-secondary border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-secondary/80 gap-1.5 transition-colors shadow-soft h-10">
               <Upload className="h-4 w-4" /> Bulk Import
               <input

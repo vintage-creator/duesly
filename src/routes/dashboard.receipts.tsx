@@ -7,6 +7,8 @@ import { Download, Share2, FileText, Printer, CheckCircle2, Clock3, Copy, Receip
 import { formatNaira } from "@/lib/sample-data";
 import { toast } from "sonner";
 import { getReceipts } from "@/lib/db-actions";
+import { DueslyLogo } from "@/components/duesly/logo";
+import { getReceiptVerificationCode } from "@/lib/receipt-utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/dashboard/receipts")({
@@ -77,6 +79,7 @@ function Page() {
     toast.success("Receipt verification link copied. Anyone with the link can view this receipt.");
     setTimeout(() => setCopiedReceiptId((current) => current === r.id ? null : current), 2000);
   };
+  const selectedReceiptLink = selectedReceipt && typeof window !== "undefined" ? `${window.location.origin}/receipts/${selectedReceipt.id}` : "";
 
   return (
     <OrgShell title="Receipts" subtitle="Every receipt issued from your association."
@@ -181,17 +184,7 @@ function Page() {
           <div id="printable-receipt" className="space-y-6 text-center">
             {/* Header */}
             <div className="flex flex-col items-center">
-              <div className="inline-flex items-center gap-2 font-display font-bold tracking-tight">
-                <span className="relative grid h-8 w-8 place-items-center rounded-xl bg-gradient-emerald shadow-emerald shrink-0">
-                  <svg viewBox="0 0 24 24" className="h-4 w-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M4 7c4-4 12-4 16 0" />
-                    <path d="M4 12c4-4 12-4 16 0" />
-                    <path d="M4 17c4-4 12-4 16 0" />
-                  </svg>
-                  <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-gold ring-2 ring-background" />
-                </span>
-                <span className="text-lg text-navy">Duesly</span>
-              </div>
+              <DueslyLogo className="scale-90" />
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mt-2.5">Official Platform Receipt</p>
               <p className="text-xs text-muted-foreground mt-0.5">Issued on behalf of {selectedReceipt?.orgName || "Ariaria Market Association"}</p>
               <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-emerald/10 px-3 py-1 text-xs font-semibold text-emerald">
@@ -218,10 +211,12 @@ function Page() {
                 <span className="font-mono font-semibold text-navy">{selectedReceipt?.id}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Duesly Settlement Ref</span>
-                <span className="font-mono font-semibold text-navy">
-                  DS-TX-{(selectedReceipt ? (Math.abs(selectedReceipt.id.split("").reduce((a, c) => a + c.charCodeAt(0), 0) * 1664525) % 100000000).toString().padStart(8, "0") : "")}
-                </span>
+                <span className="text-muted-foreground">Verification Code</span>
+                <span className="font-mono font-semibold text-navy">{getReceiptVerificationCode(selectedReceipt?.id)}</span>
+              </div>
+              <div className="flex justify-between items-center gap-3">
+                <span className="text-muted-foreground">Payment Rail</span>
+                <span className="font-semibold text-navy">Nomba MFB Virtual Account</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Payer ({orgType === "Estate" ? "Resident" : orgType === "Cooperative" ? "Member" : "Vendor"})</span>
@@ -239,11 +234,15 @@ function Page() {
                 <span className="text-muted-foreground">Status</span>
                 <span className="text-emerald font-bold uppercase tracking-wider text-[10px]">{selectedReceipt?.status}</span>
               </div>
+              <div className="border-t border-border/70 pt-3">
+                <span className="text-muted-foreground">Verify Online</span>
+                <p className="mt-1 break-all font-mono text-[11px] font-semibold text-navy">{selectedReceiptLink}</p>
+              </div>
             </div>
 
             {/* Footer Notice */}
             <div className="text-[10px] text-muted-foreground/60 leading-relaxed">
-              This receipt was dynamically compiled and verified by Duesly Technologies Ltd under authorization of Nomba financial channel partnerships.
+              This receipt exists in the Duesly receipt registry and can be verified with the reference and verification code above.
             </div>
           </div>
 

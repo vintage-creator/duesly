@@ -28,7 +28,7 @@ function Page() {
   const [currentOrgType, setCurrentOrgType] = useState(orgName.includes("Market") ? "Market" : orgName.includes("Estate") ? "Estate" : "Cooperative");
   const [currentOrgPhone, setCurrentOrgPhone] = useState(orgPhone || "");
   const [currentOrgAddress, setCurrentOrgAddress] = useState(orgAddress || "");
-  const [currentWalletAccount, setCurrentWalletAccount] = useState(walletAccount || "9032 4400 01");
+  const [currentWalletAccount, setCurrentWalletAccount] = useState(walletAccount || "");
   
   const [dailySummary, setDailySummary] = useState(dailySummaryActive ?? true);
   const [smsReceipts, setSmsReceipts] = useState(smsReceiptsActive ?? true);
@@ -88,7 +88,7 @@ function Page() {
             setCurrentOrgType(res.orgType);
             setCurrentOrgPhone(res.orgPhone || "");
             setCurrentOrgAddress(res.orgAddress || "");
-            setCurrentWalletAccount(res.walletAccount || "9032 4400 01");
+            setCurrentWalletAccount(res.walletAccount || "");
             setDailySummary(res.dailySummaryActive ?? true);
             setSmsReceipts(res.smsReceiptsActive ?? true);
             setWeeklyReport(res.weeklyReportActive ?? false);

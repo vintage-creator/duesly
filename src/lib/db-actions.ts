@@ -2,8 +2,77 @@ import { createServerFn } from "@tanstack/react-start";
 import { pool } from "./db";
 import { z } from "zod";
 import { askGeminiCoach } from "./gemini";
+import { generateReceiptId } from "./receipt-utils";
 
 const generateId = (prefix: string) => prefix + "-" + Math.floor(1000 + Math.random() * 9000);
+const REQUIRED_VENDOR_IMPORT_HEADERS = ["name", "shop", "phone", "section"] as const;
+
+function parseCSVLine(line: string) {
+  const values: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const nextChar = line[i + 1];
+
+    if (char === '"' && inQuotes && nextChar === '"') {
+      current += '"';
+      i++;
+    } else if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === "," && !inQuotes) {
+      values.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+
+  values.push(current.trim());
+  return values;
+}
+
+function normalizeImportHeader(value: string) {
+  return value.trim().toLowerCase().replace(/[\s_-]+/g, "");
+}
+
+function canonicalImportHeader(value: string) {
+  const normalized = normalizeImportHeader(value);
+  if (["name", "fullname", "vendor", "member", "resident"].includes(normalized)) return "name";
+  if (["shop", "stall", "coordinate", "house", "houseblock", "memberid"].includes(normalized)) return "shop";
+  if (["phone", "phonenumber", "mobile", "mobilenumber"].includes(normalized)) return "phone";
+  if (["section", "zone", "street", "division", "line"].includes(normalized)) return "section";
+  return normalized;
+}
+
+export function getLedgerSnapshot(currentPaid: number, due: number, incomingAmount: number) {
+  const previousPaid = Number(currentPaid) || 0;
+  const expected = Number(due) || 0;
+  const paidDelta = Number(incomingAmount) || 0;
+  const paidToDate = previousPaid + paidDelta;
+  const diffToDate = paidToDate - expected;
+
+  let vendorStatus = "unpaid";
+  if (paidToDate >= expected) {
+    vendorStatus = paidToDate > expected ? "overpaid" : "paid";
+  } else if (paidToDate > 0) {
+    vendorStatus = "partial";
+  }
+
+  let reconciliationStatus = "matched";
+  if (diffToDate > 0) reconciliationStatus = "overpaid";
+  else if (diffToDate < 0) reconciliationStatus = "underpaid";
+
+  return {
+    paidToDate,
+    diffToDate,
+    vendorStatus,
+    reconciliationStatus,
+    paymentStatus: reconciliationStatus === "overpaid" ? "Overpaid" : reconciliationStatus === "underpaid" ? "Partial" : "Matched",
+    receiptStatus: reconciliationStatus === "underpaid" ? "Partial" : "Issued",
+  };
+}
 
 // Get Organization Admin Dashboard Data
 export const getDashboardData = createServerFn({ method: "GET" })
@@ -195,15 +264,21 @@ export const createVendor = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const activeOrgId = data.orgId || "ORG-001";
     const id = "V-" + Math.floor(1000 + Math.random() * 9000);
-    const virtualAccount = await createNombaVirtualAccount(data.name, data.shop);
-    
-    await pool.query(
-      `INSERT INTO vendors (id, org_id, name, shop, phone, section, virtual_account, due, paid, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [id, activeOrgId, data.name, data.shop, data.phone, data.section, virtualAccount, 0, 0, "paid"]
-    );
 
-    return { success: true, id, virtualAccount };
+    try {
+      const virtualAccount = await createNombaVirtualAccount(data.name, data.shop);
+      
+      await pool.query(
+        `INSERT INTO vendors (id, org_id, name, shop, phone, section, virtual_account, due, paid, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [id, activeOrgId, data.name, data.shop, data.phone, data.section, virtualAccount, 0, 0, "paid"]
+      );
+
+      return { success: true, id, virtualAccount };
+    } catch (error: any) {
+      console.error("Vendor creation blocked by Nomba provisioning failure:", error);
+      return { success: false, error: error.message || "Nomba virtual account provisioning failed." };
+    }
   });
 
 // Get Dues Categories
@@ -428,26 +503,19 @@ export const resolveReconciliation = createServerFn({ method: "POST" })
         if (vendorRes.rowCount && vendorRes.rowCount > 0) {
           const vendor = vendorRes.rows[0];
           const amount = parseFloat(rec.paid);
-          const newPaid = parseFloat(vendor.paid) + amount;
           const due = parseFloat(vendor.due);
-
-          let status = "unpaid";
-          if (newPaid >= due) {
-            status = newPaid > due ? "overpaid" : "paid";
-          } else if (newPaid > 0) {
-            status = "partial";
-          }
+          const ledger = getLedgerSnapshot(parseFloat(vendor.paid), due, amount);
 
           // Update vendor status
           await pool.query(
             "UPDATE vendors SET paid = $1, status = $2 WHERE id = $3",
-            [newPaid, status, vendor.id]
+            [ledger.paidToDate, ledger.vendorStatus, vendor.id]
           );
 
           // Update reconciliation status
           await pool.query(
             "UPDATE reconciliations SET vendor_name = $1, expected = $2, diff = $3, status = $4 WHERE id = $5",
-            [vendor.name, due, amount - due, "matched", data.id]
+            [vendor.name, due, ledger.diffToDate, ledger.reconciliationStatus, data.id]
           );
 
           // Log payment
@@ -464,16 +532,16 @@ export const resolveReconciliation = createServerFn({ method: "POST" })
               amount,
               "Monthly Levy",
               "Today",
-              "Matched"
+              ledger.paymentStatus
             ]
           );
 
           // Issue receipt
-          const rcpId = "RCP-" + Math.floor(10000 + Math.random() * 90000);
+          const rcpId = generateReceiptId(txnId);
           await pool.query(
             `INSERT INTO receipts (id, org_id, vendor_name, category, amount, date, status)
              VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [rcpId, activeOrgId, vendor.name, "Monthly Levy", amount, "Today", "Issued"]
+            [rcpId, activeOrgId, vendor.name, "Monthly Levy", amount, "Today", ledger.receiptStatus]
           );
 
           // Dispatch email alert via Resend API
@@ -853,12 +921,12 @@ export const getVendorPortal = createServerFn({ method: "POST" })
             let newTxnsCount = 0;
 
             for (const txn of txns) {
-              const txnRef = txn.transactionId || txn.ref || txn.id;
+              const txnRef = txn.transactionId || txn.transaction_id || txn.merchantTxRef || txn.reference || txn.ref || txn.id;
               if (!txnRef) continue;
 
               const existingPay = await pool.query("SELECT 1 FROM payments WHERE id = $1 LIMIT 1", [txnRef]);
               if (existingPay.rowCount === 0) {
-                const txnAmount = parseFloat(txn.amount);
+                const txnAmount = parseFloat(txn.amount || txn.amountPaid || txn.paidAmount || txn.transaction?.amount);
                 if (isNaN(txnAmount) || txnAmount <= 0) continue;
 
                 newTxnsCount++;
@@ -866,22 +934,15 @@ export const getVendorPortal = createServerFn({ method: "POST" })
                 // 1. Update vendor paid & status
                 const currentPaid = parseFloat(vendor.paid) || 0;
                 const currentDue = parseFloat(vendor.due) || 0;
-                const newPaid = currentPaid + txnAmount;
-
-                let newStatus = "unpaid";
-                if (newPaid >= currentDue) {
-                  newStatus = newPaid > currentDue ? "overpaid" : "paid";
-                } else if (newPaid > 0) {
-                  newStatus = "partial";
-                }
+                const ledger = getLedgerSnapshot(currentPaid, currentDue, txnAmount);
 
                 await pool.query(
                   "UPDATE vendors SET paid = $1, status = $2 WHERE id = $3",
-                  [newPaid, newStatus, vendor.id]
+                  [ledger.paidToDate, ledger.vendorStatus, vendor.id]
                 );
                 
-                vendor.paid = newPaid.toString();
-                vendor.status = newStatus;
+                vendor.paid = ledger.paidToDate.toString();
+                vendor.status = ledger.vendorStatus;
 
                 // 2. Insert payment log
                 const todayStr = new Date().toLocaleDateString("en-NG", {
@@ -901,28 +962,24 @@ export const getVendorPortal = createServerFn({ method: "POST" })
                     txnAmount,
                     "Monthly Levy",
                     "Today, " + new Date().toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" }),
-                    newStatus === "overpaid" ? "Overpaid" : newStatus === "partial" ? "Partial" : "Matched",
+                    ledger.paymentStatus,
                   ]
                 );
 
                 // 3. Insert reconciliation entry
-                let recStatus = "matched";
-                if (newStatus === "overpaid") recStatus = "overpaid";
-                else if (newStatus === "partial") recStatus = "underpaid";
-
                 const rcId = "RC-" + Math.floor(100 + Math.random() * 900);
                 await pool.query(
                   `INSERT INTO reconciliations (id, org_id, source, vendor_name, expected, paid, diff, status)
                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                  [rcId, vendor.org_id, vendor.virtual_account, vendor.name, currentDue, txnAmount, txnAmount - currentDue, recStatus]
+                  [rcId, vendor.org_id, vendor.virtual_account, vendor.name, currentDue, ledger.paidToDate, ledger.diffToDate, ledger.reconciliationStatus]
                 );
 
                 // 4. Insert receipt
-                const rcpId = "RCP-" + Math.floor(10000 + Math.random() * 90000);
+                const rcpId = generateReceiptId(txnRef);
                 await pool.query(
                   `INSERT INTO receipts (id, org_id, vendor_name, category, amount, date, status)
                    VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                  [rcpId, vendor.org_id, vendor.name, "Monthly Levy", txnAmount, todayStr, newStatus === "partial" ? "Partial" : "Issued"]
+                  [rcpId, vendor.org_id, vendor.name, "Monthly Levy", txnAmount, todayStr, ledger.receiptStatus]
                 );
 
                 // 5. Create notifications for vendor and admin
@@ -1221,7 +1278,7 @@ export async function dispatchAutoSettlementSplits(
             );
 
             // Log split debit receipt
-            const rcpId = "RCP-" + Math.floor(10000 + Math.random() * 90000);
+            const rcpId = generateReceiptId(txnId);
             await pool.query(
               `INSERT INTO receipts (id, org_id, vendor_name, category, amount, date, status)
                VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -1276,47 +1333,43 @@ export async function createNombaVirtualAccount(vendorName: string, shopNumber: 
   const subAccountId = process.env.NOMBA_SUB_ACCOUNT_ID;
   const parentAccountId = process.env.NOMBA_PARENT_ACCOUNT_ID;
 
-  if (clientId && privateKey && subAccountId && parentAccountId) {
-    try {
-      console.log(`Initiating Nomba Virtual Account registration for: ${vendorName} (Shop: ${shopNumber})`);
-      const accessToken = await getNombaAccessToken();
-      const baseUrl = "https://api.nomba.com";
-      
-      const response = await fetch(`${baseUrl}/v1/accounts/virtual`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "accountId": parentAccountId,
-          "Authorization": `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          accountRef: "ref-" + Math.floor(10000000 + Math.random() * 90000000),
-          accountName: `Duesly ${vendorName}`.replace(/[^a-zA-Z0-9 ]/g, "").slice(0, 40).trim(),
-          email: `${vendorName.toLowerCase().replace(/\s+/g, "")}@duesly-vendor.org`,
-          phoneNumber: "08030000000",
-          subAccountId: subAccountId,
-        }),
-      });
-      
-      const result: any = await response.json();
-      console.log("Nomba Virtual Account creation API result:", result);
-      
-      if (response.ok) {
-        if (result.data?.bankAccountNumber) {
-          return result.data.bankAccountNumber;
-        } else if (result.data?.accountNumber) {
-          return result.data.accountNumber;
-        } else if (result.data?.banks?.[0]?.accountNumber) {
-          return result.data.banks[0].accountNumber;
-        }
-      }
-    } catch (e) {
-      console.warn("Nomba API contact failed, generating virtual NUBAN fallback:", e);
-    }
+  if (!clientId || !privateKey || !subAccountId || !parentAccountId) {
+    throw new Error("Nomba virtual account provisioning is not configured. Set NOMBA_CLIENT_ID, NOMBA_PRIVATE_KEY, NOMBA_SUB_ACCOUNT_ID, and NOMBA_PARENT_ACCOUNT_ID.");
   }
 
-  // Fallback to Nomba simulated NUBAN format
-  return "9032 " + Math.floor(1000 + Math.random() * 9000) + " " + Math.floor(10 + Math.random() * 90);
+  console.log(`Initiating Nomba Virtual Account registration for: ${vendorName} (Shop: ${shopNumber})`);
+  const accessToken = await getNombaAccessToken();
+  const baseUrl = "https://api.nomba.com";
+  
+  const response = await fetch(`${baseUrl}/v1/accounts/virtual`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "accountId": parentAccountId,
+      "Authorization": `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      accountRef: "ref-" + Math.floor(10000000 + Math.random() * 90000000),
+      accountName: `Duesly ${vendorName}`.replace(/[^a-zA-Z0-9 ]/g, "").slice(0, 40).trim(),
+      email: `${vendorName.toLowerCase().replace(/\s+/g, "")}@duesly-vendor.org`,
+      phoneNumber: "08030000000",
+      subAccountId: subAccountId,
+    }),
+  });
+  
+  const result: any = await response.json().catch(() => null);
+  console.log("Nomba Virtual Account creation API result:", result);
+  
+  if (!response.ok) {
+    throw new Error(`Nomba virtual account provisioning failed: ${response.status} ${JSON.stringify(result)}`);
+  }
+
+  const accountNumber = result?.data?.bankAccountNumber || result?.data?.accountNumber || result?.data?.banks?.[0]?.accountNumber;
+  if (!accountNumber) {
+    throw new Error(`Nomba virtual account provisioning succeeded without an account number: ${JSON.stringify(result)}`);
+  }
+
+  return accountNumber;
 }
 
 // Bulk CSV Upload Onboarding
@@ -1327,35 +1380,73 @@ export const importVendorsCSV = createServerFn({ method: "POST" })
   }))
   .handler(async ({ data }) => {
     const activeOrgId = data.orgId || "ORG-001";
-    const lines = data.csvContent.split("\n");
+    const lines = data.csvContent
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (lines.length < 2) {
+      throw new Error("CSV must include a header row and at least one member row.");
+    }
+
+    const rawHeaders = parseCSVLine(lines[0]);
+    const canonicalHeaders = rawHeaders.map(canonicalImportHeader);
+    const missingHeaders = REQUIRED_VENDOR_IMPORT_HEADERS.filter((header) => !canonicalHeaders.includes(header));
+
+    if (missingHeaders.length > 0) {
+      throw new Error(`CSV is missing required column(s): ${missingHeaders.join(", ")}. Required columns: name, shop, phone, section.`);
+    }
+
+    const headerIndexes = REQUIRED_VENDOR_IMPORT_HEADERS.reduce<Record<string, number>>((acc, header) => {
+      acc[header] = canonicalHeaders.indexOf(header);
+      return acc;
+    }, {});
+
+    const rows = lines.slice(1).map((line, index) => {
+      const values = parseCSVLine(line);
+      const rowNumber = index + 2;
+      const row = {
+        name: values[headerIndexes.name]?.trim() || "",
+        shop: values[headerIndexes.shop]?.trim() || "",
+        phone: values[headerIndexes.phone]?.trim() || "",
+        section: values[headerIndexes.section]?.trim() || "",
+      };
+
+      const missingValues = REQUIRED_VENDOR_IMPORT_HEADERS.filter((header) => !row[header]);
+      if (missingValues.length > 0) {
+        throw new Error(`Row ${rowNumber} is missing required value(s): ${missingValues.join(", ")}.`);
+      }
+
+      return row;
+    });
+
+    const seenKeys = new Set<string>();
+    for (const [index, row] of rows.entries()) {
+      const rowKey = `${row.name.toLowerCase()}|${row.phone.replace(/\s+/g, "")}`;
+      if (seenKeys.has(rowKey)) {
+        throw new Error(`Row ${index + 2} duplicates another row for ${row.name} / ${row.phone}.`);
+      }
+      seenKeys.add(rowKey);
+    }
+
     let count = 0;
-    
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      const parts = line.split(",").map(p => p.trim());
-      
-      // Skip header row
-      if (parts[0].toLowerCase() === "name" || parts[0].toLowerCase() === "fullname" || parts[0].toLowerCase() === "vendor") {
-        continue;
+    for (const row of rows) {
+      const id = "V-" + Math.floor(1000 + Math.random() * 9000);
+      let virtualAccount = "";
+
+      try {
+        virtualAccount = await createNombaVirtualAccount(row.name, row.shop);
+      } catch (error: any) {
+        throw new Error(`Nomba provisioning failed for ${row.name}: ${error.message || "unknown error"}`);
       }
 
-      if (parts.length >= 3) {
-        const name = parts[0];
-        const shop = parts[1];
-        const phone = parts[2];
-        const section = parts[3] || "General Section";
-        
-        const id = "V-" + Math.floor(1000 + Math.random() * 9000);
-        const virtualAccount = await createNombaVirtualAccount(name, shop);
-
-        await pool.query(
-          `INSERT INTO vendors (id, org_id, name, shop, phone, section, virtual_account, due, paid, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-           ON CONFLICT (id) DO NOTHING`,
-          [id, activeOrgId, name, shop, phone, section, virtualAccount, 18000, 0, "unpaid"]
-        );
-        count++;
-      }
+      await pool.query(
+        `INSERT INTO vendors (id, org_id, name, shop, phone, section, virtual_account, due, paid, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (id) DO NOTHING`,
+        [id, activeOrgId, row.name, row.shop, row.phone, row.section, virtualAccount, 18000, 0, "unpaid"]
+      );
+      count++;
     }
     
     return { success: true, imported: count };
@@ -1615,7 +1706,14 @@ export const registerUser = createServerFn({ method: "POST" })
     const orgId = "ORG-" + Math.floor(100 + Math.random() * 899);
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const typeSelected = data.orgType || "Market";
-    const walletAccount = await createNombaVirtualAccount(data.orgName, "HQ");
+    let walletAccount = "";
+
+    try {
+      walletAccount = await createNombaVirtualAccount(data.orgName, "HQ");
+    } catch (error: any) {
+      console.error("Organization signup blocked by Nomba provisioning failure:", error);
+      return { success: false, error: error.message || "Nomba settlement account provisioning failed." };
+    }
     
     // 1. Create Organization
     await pool.query(
@@ -1814,7 +1912,14 @@ export const registerMember = createServerFn({ method: "POST" })
       );
     } else {
       const memberId = "V-" + Math.floor(1000 + Math.random() * 9000);
-      const virtualAccount = await createNombaVirtualAccount(fullName, data.shop);
+      let virtualAccount = "";
+
+      try {
+        virtualAccount = await createNombaVirtualAccount(fullName, data.shop);
+      } catch (error: any) {
+        console.error("Member signup blocked by Nomba provisioning failure:", error);
+        return { success: false, error: error.message || "Nomba virtual account provisioning failed." };
+      }
 
       await pool.query(
         "INSERT INTO users (email, password, role, org_id, name, is_verified) VALUES ($1, $2, $3, $4, $5, $6)",
@@ -2377,7 +2482,7 @@ export const simulateIncomingPayment = createServerFn({ method: "POST" })
     );
 
     // Issue receipt
-    const rcpId = "RCP-" + Math.floor(10000 + Math.random() * 90000);
+    const rcpId = generateReceiptId(txnId);
     await pool.query(
       `INSERT INTO receipts (id, org_id, vendor_name, category, amount, date, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -2576,7 +2681,7 @@ export const approveWithdrawalRequest = createServerFn({ method: "POST" })
     );
 
     // Insert receipt log (debit)
-    const rcpId = "RCP-" + Math.floor(10000 + Math.random() * 90000);
+    const rcpId = generateReceiptId(txnId);
     await pool.query(
       `INSERT INTO receipts (id, org_id, vendor_name, category, amount, date, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
