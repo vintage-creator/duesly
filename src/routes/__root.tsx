@@ -7,11 +7,14 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportClientError } from "../lib/error-reporting";
 import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 function NotFoundComponent() {
   return (
@@ -118,6 +121,18 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
+        <script dangerouslySetInnerHTML={{ __html: `
+          if (typeof window !== 'undefined') {
+            window.global = window;
+            if (typeof window.Buffer === 'undefined') {
+              window.Buffer = {
+                isBuffer: function() { return false; },
+                from: function() { return []; },
+                concat: function() { return []; }
+              };
+            }
+          }
+        `}} />
         <HeadContent />
       </head>
       <body>
@@ -130,6 +145,83 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
+  const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
+  const [secondsRemaining, setSecondsRemaining] = useState(60);
+
+  // Inactivity timeout logic
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let lastActivity = Date.now();
+    let checkInterval: any = null;
+    let countdownInterval: any = null;
+
+    const checkTimeout = () => {
+      const user = localStorage.getItem("user");
+      if (!user) return;
+
+      const timeSinceLastActivity = Date.now() - lastActivity;
+      const TIMEOUT_LIMIT = 15 * 60 * 1000; // 15 minutes
+      const WARNING_THRESHOLD = TIMEOUT_LIMIT - 60 * 1000; // 14 minutes
+
+      if (timeSinceLastActivity >= TIMEOUT_LIMIT) {
+        handleLogout();
+      } else if (timeSinceLastActivity >= WARNING_THRESHOLD) {
+        const remaining = Math.max(0, Math.ceil((TIMEOUT_LIMIT - timeSinceLastActivity) / 1000));
+        setSecondsRemaining(remaining);
+        setShowTimeoutWarning(true);
+      } else {
+        setShowTimeoutWarning(false);
+      }
+    };
+
+    const handleLogout = () => {
+      localStorage.removeItem("user");
+      setShowTimeoutWarning(false);
+      clearInterval(checkInterval);
+      clearInterval(countdownInterval);
+      toast.info("Your session has timed out due to inactivity.", { duration: 6000 });
+      router.navigate({ to: "/login" });
+    };
+
+    const resetActivity = () => {
+      lastActivity = Date.now();
+      setShowTimeoutWarning(false);
+    };
+
+    const events = ["mousedown", "keydown", "scroll", "touchstart", "mousemove"];
+    events.forEach((event) => {
+      window.addEventListener(event, resetActivity, { passive: true });
+    });
+
+    // Check inactivity state every 5 seconds
+    checkInterval = setInterval(checkTimeout, 5000);
+
+    // Precise 1s ticker for warnings
+    countdownInterval = setInterval(() => {
+      const user = localStorage.getItem("user");
+      if (!user) return;
+
+      const timeSinceLastActivity = Date.now() - lastActivity;
+      const TIMEOUT_LIMIT = 15 * 60 * 1000;
+
+      if (timeSinceLastActivity >= TIMEOUT_LIMIT) {
+        handleLogout();
+      } else if (timeSinceLastActivity >= TIMEOUT_LIMIT - 60 * 1000) {
+        const remaining = Math.max(0, Math.ceil((TIMEOUT_LIMIT - timeSinceLastActivity) / 1000));
+        setSecondsRemaining(remaining);
+      }
+    }, 1000);
+
+    return () => {
+      events.forEach((event) => {
+        window.removeEventListener(event, resetActivity);
+      });
+      clearInterval(checkInterval);
+      clearInterval(countdownInterval);
+    };
+  }, [router]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
@@ -146,6 +238,47 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <Outlet />
       <Toaster richColors position="top-right" />
+
+      {/* Inactivity Timeout Alert Dialog */}
+      <Dialog open={showTimeoutWarning} onOpenChange={(o) => {
+        if (!o) {
+          const events = ["mousedown", "keydown"];
+          events.forEach(e => window.dispatchEvent(new Event(e)));
+        }
+      }}>
+        <DialogContent className="max-w-xs sm:max-w-sm rounded-3xl p-6 bg-card border shadow-elevated animate-fade-in-up">
+          <DialogHeader>
+            <DialogTitle className="font-display font-bold text-navy text-base text-center">Session Security Alert</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 text-center text-sm text-muted-foreground space-y-3">
+            <p>You have been inactive for a while. For security, your session will time out automatically in:</p>
+            <p className="font-display text-3xl font-extrabold text-gold tracking-tight">{secondsRemaining}s</p>
+          </div>
+          <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              className="cursor-pointer w-full sm:w-auto"
+              onClick={() => {
+                localStorage.removeItem("user");
+                setShowTimeoutWarning(false);
+                router.navigate({ to: "/login" });
+              }}
+            >
+              Log out
+            </Button>
+            <Button
+              variant="hero"
+              className="cursor-pointer w-full sm:w-auto"
+              onClick={() => {
+                const e = new Event("mousedown");
+                window.dispatchEvent(e);
+              }}
+            >
+              Keep working
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </QueryClientProvider>
   );
 }
