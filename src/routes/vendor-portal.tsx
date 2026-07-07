@@ -516,13 +516,11 @@ function Page() {
           <div id="printable-receipt" className="space-y-6 text-center">
             {/* Header */}
             <div className="flex flex-col items-center">
-              <div className="flex items-center gap-2">
-                <span className="font-display font-black text-2xl tracking-tight text-navy">duesly</span>
-                <span className="text-[9px] uppercase tracking-widest text-white bg-emerald px-1.5 py-0.5 rounded font-bold font-sans">NOMBA SETTLED</span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">Ariaria Market Association</p>
+              <span className="font-display font-black text-2xl tracking-tight text-navy">duesly</span>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mt-1">Official Platform Receipt</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Issued on behalf of Ariaria Market Association</p>
               <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-emerald/10 px-3 py-1 text-xs font-semibold text-emerald">
-                <CheckCircle2 className="h-4 w-4" /> Verified Settlement
+                <CheckCircle2 className="h-4 w-4" /> Verified by Duesly
               </div>
             </div>
 
@@ -535,7 +533,7 @@ function Page() {
               <p className="font-display text-4xl font-extrabold text-navy mt-1">
                 ₦{selectedReceipt ? Number(selectedReceipt.amount).toLocaleString("en-NG") : "0.00"}
               </p>
-              <p className="text-[10px] text-muted-foreground/80 mt-1">Processed successfully via Nomba Webhook RPC</p>
+              <p className="text-[10px] text-muted-foreground/80 mt-1">Processed securely via Duesly Payment Infrastructure</p>
             </div>
 
             {/* Receipt Details Box */}
