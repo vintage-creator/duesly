@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { CheckCircle2, FileText, Home, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DueslyLogo } from "@/components/duesly/logo";
@@ -22,6 +23,17 @@ export const Route = createFileRoute("/receipts/$receiptId")({
 function PublicReceiptPage() {
   const receipt = Route.useLoaderData();
   const verificationCode = receipt ? getReceiptVerificationCode(receipt.id) : "";
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const searchParams = new URLSearchParams(window.location.search);
+      if (searchParams.get("print") === "true") {
+        setTimeout(() => {
+          window.print();
+        }, 800);
+      }
+    }
+  }, []);
 
   if (!receipt) {
     return (

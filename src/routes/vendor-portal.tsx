@@ -1150,7 +1150,10 @@ function Page() {
               <Printer className="mr-2 h-4 w-4" /> Print
             </Button>
             <Button variant="hero" className="cursor-pointer flex-1 sm:flex-none" onClick={() => {
-              toast.success("Receipt PDF downloaded to device!");
+              if (selectedReceipt) {
+                window.open(`/receipts/${selectedReceipt.id}?print=true`, "_blank");
+                toast.success("Opening print window...");
+              }
               setReceiptDialogOpen(false);
               window.setTimeout(() => setSelectedReceipt(null), 200);
             }}>
