@@ -107,7 +107,7 @@ async function main() {
 
     await client.query(`
       CREATE TABLE payments (
-        id VARCHAR(50) PRIMARY KEY,
+        id VARCHAR(100) PRIMARY KEY,
         org_id VARCHAR(50) REFERENCES organizations(id) ON DELETE CASCADE,
         vendor_id VARCHAR(50) REFERENCES vendors(id) ON DELETE SET NULL,
         vendor_name VARCHAR(255) NOT NULL,
@@ -121,7 +121,7 @@ async function main() {
 
     await client.query(`
       CREATE TABLE reconciliations (
-        id VARCHAR(50) PRIMARY KEY,
+        id VARCHAR(100) PRIMARY KEY,
         org_id VARCHAR(50) REFERENCES organizations(id) ON DELETE CASCADE,
         source VARCHAR(100) NOT NULL,
         vendor_name VARCHAR(255) NOT NULL,
@@ -134,7 +134,7 @@ async function main() {
 
     await client.query(`
       CREATE TABLE receipts (
-        id VARCHAR(50) PRIMARY KEY,
+        id VARCHAR(100) PRIMARY KEY,
         org_id VARCHAR(50) REFERENCES organizations(id) ON DELETE CASCADE,
         vendor_name VARCHAR(255) NOT NULL,
         category VARCHAR(255) NOT NULL,
